@@ -1,0 +1,195 @@
+private fun executeTransitionTask(...) {
+    TransitionSharedContext().use { shared ->
+        transitionTasks.forEach { task ->
+            VideoTransitionContext(
+                shared,
+                task.getVideoCodecType().value,
+                task.transcodingVO.width,
+                task.transcodingVO.height,
+                task.spec
+            ).use { ctx ->
+                transitionExecutor.execute(task, ctx)
+            }
+        }
+    }
+}
+
+
+
+///
+
+class TransitionSharedContext : AutoCloseable {
+    val eglCore = EglCore()
+    val glResource = GLContextResource()
+    val texturePool = TexturePool()
+
+    override fun close() {
+        texturePool.release()
+        glResource.release()
+        eglCore.close()
+    }
+}
+
+
+////
+
+
+class VideoTransitionContext(
+    shared: TransitionSharedContext,
+    mimeType: String,
+    width: Int,
+    height: Int,
+    spec: VideoTransitionSpec.Fade
+) : AutoCloseable {
+
+    val eglCore = shared.eglCore
+    val glResource = shared.glResource
+    val texturePool = shared.texturePool
+
+    val encoder: MediaCodec
+    val eglSurface: EglSurfaceWrapper
+    val transitionEncoder = TransitionEncoder(mimeType, width, height, spec)
+
+    init {
+        encoder = transitionEncoder.createEncoder()
+        val surface = encoder.createInputSurface()
+        eglSurface = EglSurfaceWrapper(eglCore, surface)
+        eglSurface.makeCurrent()
+        encoder.start()
+    }
+
+    override fun close() {
+        eglSurface.close()
+        encoder.stop()
+        encoder.release()
+    }
+}
+
+
+////
+
+fun writeTrack(
+    numChannel: Int,
+    source: MPFile,
+    channels: BlockingQueue<MediaCodecChannel>
+): Result {
+
+    SLog.i(
+        TAG,
+        "writeTrack(channel): numChannel=$numChannel, source=${source.path()}, channels=${channels.size}"
+    )
+
+    var firstPtsUs = Long.MAX_VALUE
+    var lastPtsUs = 0L
+
+    start()
+
+    repeat(numChannel) {
+
+        SLog.i(TAG, "waiting for MediaCodecChannel...")
+        val channel = channels.take()
+        val mimeType = channel.mimeType.value
+
+        SLog.i(TAG, "got channel: mimeType=$mimeType")
+
+        if (!targetMimeTypes.any { mimeType.startsWith(it) }) {
+            SLog.w(TAG, "skip channel mimeType=$mimeType")
+            return@repeat
+        }
+
+        val (muxTrackIndex, _) = trackInfos[mimeType]
+            ?: throw IllegalStateException("no mux track for $mimeType")
+
+        // ---------- determine logical time range ----------
+        var firstTransferTsUs =
+            if (firstTransferTimestampUs == 0L)
+                source.getFirstVideoFrameTimestampUs(mimeType)
+            else firstTransferTimestampUs
+
+        var lastTransferTsUs =
+            if (lastTransferTimestampUs == 0L)
+                source.getDistinctLastTimestampUs(mimeType)
+            else lastTransferTimestampUs
+
+        // apply adjustTimeRange if needed
+        adjustTimeRange?.invoke(
+            firstTransferTsUs,
+            lastTransferTsUs,
+            trimList ?: emptyList()
+        )?.also {
+            firstTransferTsUs = it.first
+            lastTransferTsUs = it.second
+        }
+
+        SLog.i(
+            TAG,
+            "[$mimeType] transfer range: $firstTransferTsUs ~ $lastTransferTsUs"
+        )
+
+        var reachedLogicalEOS = false
+
+        while (!reachedLogicalEOS) {
+            val buffer = channel.take()
+            val info = buffer.info
+            val data = buffer.data
+
+            // producer EOS: just stop reading channel
+            if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                SLog.i(TAG, "[$mimeType] producer EOS")
+                break
+            }
+
+            val pts = info.presentationTimeUs
+
+            when {
+                pts < firstTransferTsUs -> {
+                    // skip overlapped head
+                    continue
+                }
+
+                pts > lastTransferTsUs -> {
+                    // logical EOS for this segment
+                    SLog.i(
+                        TAG,
+                        "[$mimeType] logical EOS at pts=$pts (limit=$lastTransferTsUs)"
+                    )
+                    reachedLogicalEOS = true
+                    continue
+                }
+
+                else -> {
+                    val newPts = pts + lastTransferredTimestampUs
+                    info.presentationTimeUs = newPts
+
+                    muxer.writeSampleData(muxTrackIndex, data, info)
+                    data.rewind()
+
+                    if (newPts < firstPtsUs) firstPtsUs = newPts
+                    if (newPts > lastPtsUs) lastPtsUs = newPts
+
+                    eventListener?.onEachFrameTransferred(source, mimeType, info)
+                }
+            }
+        }
+    }
+
+    val durationUs =
+        if (firstPtsUs == Long.MAX_VALUE) 0L
+        else lastPtsUs - firstPtsUs
+
+    if (durationUs > 0) {
+        lastTransferredTimestampUs += durationUs
+    }
+
+    eventListener?.onTransferComplete(source)
+
+    SLog.i(
+        TAG,
+        "writeTrack(channel) DONE: durationUs=$durationUs, lastTransferredTimestampUs=$lastTransferredTimestampUs"
+    )
+
+    return Result(durationUs = durationUs)
+}
+
+
+
