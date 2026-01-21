@@ -1,0 +1,151 @@
+package com.example.transition.transition
+
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.media.MediaCodec
+import android.opengl.GLES20
+import com.example.transition.transition.egl.EGLContextManager
+import com.example.transition.transition.egl.EglSurfaceWrapper
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+class FadeTransitionRenderer(
+    private val mimeType: String,
+    private val width: Int,
+    private val height: Int,
+    private val transcodingVO: TranscodingVO,
+    private val spec: VideoTransitionSpec.Fade
+) {
+
+    private val encoderWrapper = TransitionEncoder(mimeType, width, height, spec)
+    private val eglCore = EGLContextManager.eglCore
+
+    fun render(
+        prevBitmap: Bitmap,
+        nextBitmap: Bitmap
+    ): List<Pair<ByteBuffer, MediaCodec.BufferInfo>> {
+
+        val encoder = encoderWrapper.createEncoder()
+        val surface = encoder.createInputSurface()
+        val eglSurface = EglSurfaceWrapper(eglCore, surface)
+
+        encoder.start()
+        eglSurface.makeCurrent()
+
+        val normalizer = GpuFrameNormalizer(width, height)
+        val prevTex = normalizer.normalize(prevBitmap, transcodingVO.rotation)
+        val prevBmp = dumpTextureToBitmap(
+            prevTex.textureId,
+            width,
+            height
+        )
+        saveBitmapAsJpg(
+            flipVertical(prevBmp),
+            File("/sdcard/Download/prev_normalized.jpg")
+        )
+        val nextTex = normalizer.normalize(nextBitmap, transcodingVO.rotation)
+        val nextBmp = dumpTextureToBitmap(
+            nextTex.textureId,
+            width,
+            height
+        )
+        saveBitmapAsJpg(
+            flipVertical(nextBmp),
+            File("/sdcard/Download/next_normalized.jpg")
+        )
+        val renderer = FadeGlRenderer(width, height)
+        renderer.setTextures(
+            Texture2D(prevTex.textureId),
+            Texture2D(nextTex.textureId)
+        )
+
+        val totalFrames = (spec.durationMs * spec.frameRate / 1000).toInt()
+        val output = mutableListOf<Pair<ByteBuffer, MediaCodec.BufferInfo>>()
+        val bufferInfo = MediaCodec.BufferInfo()
+
+        repeat(totalFrames) { i ->
+            val progress = i.toFloat() / totalFrames
+            renderer.draw(progress)
+            eglSurface.setPresentationTime(i * 1_000_000_000L / spec.frameRate)
+            eglSurface.swapBuffers()
+            encoderWrapper.drainEncoder(encoder, output, bufferInfo, false)
+        }
+
+        encoderWrapper.drainEncoder(encoder, output, bufferInfo, true)
+
+        renderer.close()
+        prevTex.close()
+        nextTex.close()
+        eglSurface.close()
+        encoder.stop()
+        encoder.release()
+
+        return output
+    }
+
+    fun dumpTextureToBitmap(
+        textureId: Int,
+        width: Int,
+        height: Int
+    ): Bitmap {
+
+        // 1. Tạo FBO
+        val fbo = IntArray(1)
+        GLES20.glGenFramebuffers(1, fbo, 0)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fbo[0])
+
+        // 2. Attach texture
+        GLES20.glFramebufferTexture2D(
+            GLES20.GL_FRAMEBUFFER,
+            GLES20.GL_COLOR_ATTACHMENT0,
+            GLES20.GL_TEXTURE_2D,
+            textureId,
+            0
+        )
+
+        val status = GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER)
+        require(status == GLES20.GL_FRAMEBUFFER_COMPLETE) {
+            "FBO incomplete: $status"
+        }
+
+        // 3. Read pixels
+        val buffer = ByteBuffer.allocateDirect(width * height * 4)
+            .order(ByteOrder.nativeOrder())
+
+        GLES20.glReadPixels(
+            0, 0,
+            width, height,
+            GLES20.GL_RGBA,
+            GLES20.GL_UNSIGNED_BYTE,
+            buffer
+        )
+
+        // 4. Convert to Bitmap
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        buffer.rewind()
+        bitmap.copyPixelsFromBuffer(buffer)
+
+        // 5. Cleanup
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glDeleteFramebuffers(1, fbo, 0)
+
+        return bitmap
+    }
+
+    fun flipVertical(src: Bitmap): Bitmap {
+        val matrix = Matrix().apply {
+            postScale(1f, -1f, src.width / 2f, src.height / 2f)
+        }
+        return Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+    }
+
+    fun saveBitmapAsJpg(bitmap: Bitmap, file: File, quality: Int = 95) {
+        FileOutputStream(file).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        }
+    }
+
+
+}
