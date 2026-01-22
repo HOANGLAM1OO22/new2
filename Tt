@@ -1,0 +1,304 @@
+Dưới đây là bản tóm tắt ngắn gọn, có root cause & solution, phù hợp để báo cáo kỹ thuật / gửi mentor / update Gerrit.
+
+
+---
+
+Summary of Issues, Root Causes, and Fixes
+
+1. Missing audio track when input includes transcoding files
+
+Symptom
+
+If all inputs are transfer-only → output has audio.
+
+If at least one input requires transcoding → output video sometimes has no audio track.
+
+
+Root Cause
+
+Audio handling path diverged:
+
+Transfer-only: audio samples are extracted via Extractor and muxed directly.
+
+Transcode case: audio goes through MediaTrackExtractor / AudioTrackEncoder.
+
+
+Problems found:
+
+MediaTrackExtractor did not send EOS to MediaCodecChannel.
+
+Missing / inconsistent codec-specific data (csd-0) for AAC.
+
+VideoTransfer.writeTrack(channel) matches tracks by mimeType, but
+
+channel mime was audio/raw
+
+muxer track was created as audio/mp4a-latm → audio samples were written but not associated with a valid muxer track.
+
+
+
+
+Solution
+
+Always send explicit EOS buffer to audio channels.
+
+Ensure AAC csd-0 is present when adding audio track format.
+
+Normalize audio channel mime:
+
+Encoder output channel must use target mime (audio/mp4a-latm), not audio/raw.
+
+
+Keep transfer and transcode paths consistent via channel-based pipeline.
+
+
+
+---
+
+2. Incorrect frame extraction (first/last frame issues)
+
+Symptom
+
+Extracting last frame sometimes returns the first frame.
+
+Transition uses wrong frames.
+
+
+Root Cause
+
+Cached bitmap from METADATA_KEY_FRAME without considering timeUs.
+
+Once cached, later requests reused the wrong frame.
+
+
+Solution
+
+Remove global bitmap caching.
+
+Always extract frame by timestamp.
+
+Frame extraction is only used for transition/debug → acceptable cost.
+
+
+
+---
+
+3. Transition tasks never executed
+
+Symptom
+
+Logs show transitionTasks.size = 0 during execution, even though tasks were prepared earlier.
+
+
+Root Cause
+
+transitionTasks were created in prepareTransitionTasks but never added to MotionScrap’s internal list used by executor.
+
+Ordering / ownership bug between prepareTasks() and execution phase.
+
+
+Solution
+
+Ensure prepared transition tasks are stored in MotionScrap.transitionTasks.
+
+Verify task lifecycle consistency before parallel execution.
+
+
+
+---
+
+4. Channel still had data but consumer stopped early
+
+Symptom
+
+Some samples remained in channel, but writeTrack(channel) exited early.
+
+Resulted in truncated audio/video or merge failures.
+
+
+Root Cause
+
+writeTrack(channel) relied on:
+
+lastTransferTimestampUs
+
+timestamp comparison instead of EOS flag
+
+
+Inconsistent EOS signaling between extractor/transcoder.
+
+
+Solution
+
+Make EOS mandatory contract for all producers.
+
+Consumer (writeTrack) must:
+
+Primarily stop on BUFFER_FLAG_END_OF_STREAM
+
+Not rely only on timestamps.
+
+
+
+
+---
+
+5. Overlapping segments cut incorrectly
+
+Symptom
+
+Output video repeated overlapped segments.
+
+Earlier logic cut previous clip instead of trimming the next one.
+
+
+Root Cause
+
+lastTransferredTimestampUs / maxDurationUs not updated correctly.
+
+Overlap logic applied in wrong direction.
+
+
+Solution
+
+Treat timeline as monotonic:
+
+Clip N runs fully.
+
+Clip N+1 starts from end(N overlap).
+
+
+Update lastTransferredTimestampUs strictly after each completed clip.
+
+
+
+---
+
+6. Transition frames flipped / inverted (rotation 90 / 270)
+
+Symptom
+
+Transition frames appear flipped compared to transfer/transcode frames.
+
+90° correct → 270° inverted (or vice versa).
+
+180° case caused horizontal flip.
+
+
+Root Cause
+
+Multiple coordinate systems mixed:
+
+Bitmap from MediaMetadataRetriever (CPU, top-left origin)
+
+OpenGL textures (bottom-left origin)
+
+Rotation already applied earlier in pipeline, but re-applied in normalize
+
+
+Rotation + implicit flip caused double inversion.
+
+
+Solution
+
+Make FrameNormalizer the single source of truth for orientation.
+
+Normalize input rotation before GL:
+
+normalized = (180 - rotation + 360) % 360
+
+Remove any hidden flips in vertex shader.
+
+Handle rotation purely in fragment shader via texture coordinates.
+
+Do NOT re-rotate frames that were already normalized upstream.
+
+
+
+---
+
+7. Green frame / corrupted output during video transcode
+
+Symptom
+
+Output frame becomes solid green, especially with rotation mismatch.
+
+Dumped dstImage already green.
+
+
+Root Cause
+
+Logic bug when setting rows/cols after rotation.
+
+Output buffer dimensions didn’t match rotated layout.
+
+ImageWriter input buffer was valid, but written with wrong geometry.
+
+
+Solution
+
+Fix row/column swap logic for 90° / 270°.
+
+Validate ImageWriter.dequeueInputImage() dimensions vs rotated format.
+
+After fix, UniImgp pipeline runs without error logs.
+
+
+
+---
+
+8. Progress reporting incorrect (e.g. 542 / 512 frames)
+
+Symptom
+
+Progress exceeded total frame count.
+
+
+Root Cause
+
+Transition frames were not included in total frame calculation, but still reported via progress callbacks.
+
+
+Solution
+
+Add transition frames:
+
+transitionFrames =
+    transitionTasks.sumOf { spec.durationMs * frameRate / 1000 }
+
+Update ProgressTracker.setTotalFrames(...).
+
+
+
+---
+
+Final Status
+
+Pipeline architecture stabilized (parallel transcode / transition / transfer).
+
+Major issues resolved:
+
+Audio missing
+
+EOS handling
+
+Frame extraction
+
+Transition execution
+
+Rotation / normalization
+
+
+Remaining work: edge-case validation & performance tuning.
+
+
+
+---
+
+Nếu bạn muốn, mình có thể:
+
+Rút gọn version 1-page report
+
+Viết commit message tổng hợp
+
+Hoặc chuẩn bị email báo cáo kỹ thuật cho team / mentor
