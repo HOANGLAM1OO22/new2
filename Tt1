@@ -1,0 +1,236 @@
+Dưới đây là bản 1-page report, viết theo style comment Jira (ngắn gọn, kỹ thuật, dễ đọc):
+
+
+---
+
+Summary
+
+After integrating the optimized pipeline (parallel transcode / transition / transfer), several functional issues were discovered and fixed across audio handling, frame extraction, transition execution, and frame normalization. The pipeline is now stable, but this report documents the root causes and applied fixes.
+
+
+---
+
+Issues, Root Causes & Fixes
+
+1. Missing audio track when input includes transcoding files
+
+Issue
+
+Output contains audio when all inputs are transfer-only.
+
+Audio is missing when at least one input requires transcoding.
+
+
+Root Cause
+
+Audio paths diverged between transfer and transcode.
+
+MediaTrackExtractor did not send EOS to audio channels.
+
+AAC codec-specific data (csd-0) was missing.
+
+Audio channel mime was audio/raw while muxer track was created as audio/mp4a-latm, so samples were not matched to a muxer track.
+
+
+Fix
+
+Enforced EOS signaling for audio channels.
+
+Ensured AAC csd-0 is always set when adding audio track format.
+
+Normalized audio channel mime to target codec (audio/mp4a-latm).
+
+Unified transfer and transcode audio paths via channel-based pipeline.
+
+
+
+---
+
+2. Incorrect frame extraction (first / last frame)
+
+Issue
+
+Extracting last frame sometimes returned the first frame, affecting transitions.
+
+
+Root Cause
+
+Bitmap caching using METADATA_KEY_FRAME ignored timestamp (timeUs).
+
+
+Fix
+
+Removed bitmap caching.
+
+Always extract frames by explicit timestamp (acceptable cost since used only for transition/debug).
+
+
+
+---
+
+3. Transition tasks never executed
+
+Issue
+
+transitionTasks existed during prepare phase but size was 0 during execution.
+
+
+Root Cause
+
+Prepared transition tasks were not added to MotionScrap’s internal task list used by executor.
+
+
+Fix
+
+Fixed task ownership/lifecycle so prepared transition tasks are registered and executed.
+
+
+
+---
+
+4. Channel had data but consumer stopped early
+
+Issue
+
+Audio/video truncated even though channels still contained buffers.
+
+
+Root Cause
+
+writeTrack(channel) relied on timestamp bounds instead of EOS.
+
+Inconsistent EOS signaling across producers.
+
+
+Fix
+
+EOS is now a mandatory contract for all channel producers.
+
+writeTrack stops on EOS, not on timestamp heuristics.
+
+
+
+---
+
+5. Overlap trimming incorrect
+
+Issue
+
+Output repeated overlapped segments between consecutive clips.
+
+
+Root Cause
+
+Overlap logic cut the previous clip instead of trimming the next.
+
+lastTransferredTimestampUs not updated consistently.
+
+
+Fix
+
+Timeline made strictly monotonic:
+
+Clip N runs fully.
+
+Clip N+1 starts after overlap with N.
+
+
+Correctly update lastTransferredTimestampUs after each clip.
+
+
+
+---
+
+6. Transition frames flipped / inverted (rotation 90 / 270 / 180)
+
+Issue
+
+Transition frames were flipped compared to transfer/transcode frames.
+
+90° correct but 270° inverted; 180° caused horizontal flip.
+
+
+Root Cause
+
+Mixed coordinate systems (Bitmap vs OpenGL).
+
+Rotation already applied earlier, then re-applied in normalization.
+
+Implicit flips in shader combined with rotation.
+
+
+Fix
+
+Centralized orientation handling in FrameNormalizer.
+
+Normalized rotation before GL:
+
+normalizedRotation = (180 - rotation + 360) % 360
+
+Removed hidden flips from vertex shader.
+
+Applied rotation only in fragment shader via texture coordinates.
+
+
+
+---
+
+7. Green frames during video transcode
+
+Issue
+
+Output frame appeared solid green, especially with rotation mismatch.
+
+
+Root Cause
+
+Incorrect row/column handling after rotation.
+
+Output buffer geometry didn’t match rotated layout.
+
+
+Fix
+
+Fixed row/col swap logic for 90° / 270°.
+
+Validated ImageWriter input dimensions against rotated format.
+
+
+
+---
+
+8. Progress exceeded total frames (e.g. 542 / 512)
+
+Issue
+
+Reported progress exceeded total frame count.
+
+
+Root Cause
+
+Transition frames were not included in total frame calculation.
+
+
+Fix
+
+Added transition frame count to progress calculation:
+
+transitionFrames = durationMs * frameRate / 1000
+
+
+
+---
+
+Current Status
+
+Pipeline is stable with parallel execution.
+
+Audio, transition, normalization, and progress issues are resolved.
+
+Remaining work is limited to edge-case validation and performance tuning.
+
+
+
+---
+
+Nếu bạn muốn, mình có thể rút gọn hơn nữa (half-page) hoặc chỉnh tone đúng chuẩn Jira nội bộ team bạn.
