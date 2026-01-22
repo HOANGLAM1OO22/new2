@@ -1,0 +1,192 @@
+Dưới đây là bản tóm tắt ngắn gọn, kỹ thuật, đủ để báo cáo / gửi mentor dựa trên toàn bộ quá trình từ đầu cuộc trò chuyện:
+
+
+---
+
+Summary of Issues Encountered
+
+1. Missing audio track in output (mixed transfer + transcode case)
+
+When all input files are transfer-only, output contains audio correctly.
+
+When any input requires transcoding, the final output misses the audio track.
+
+Root causes identified:
+
+MediaTrackExtractor (transcode path) did not propagate codec-specific data (CSD / csd-0) for AAC.
+
+MediaMuxer reported:
+MPEG4Writer: missing codec specific data, 0 frames to dump timestamps in Audio track.
+
+MIME mismatch: audio/raw produced by AudioTrackEncoder, but VideoTransfer.writeTrack(channel) expected audio/mp4a-latm.
+
+
+
+
+2. Incorrect frame extraction / caching issue
+
+Extracting the last frame sometimes returned the first frame.
+
+Cause: cached METADATA_KEY_FRAME bitmap was reused without considering timestamp.
+
+Fix direction:
+
+Avoid caching frame bitmaps, or
+
+Use timestamp-based cache, or
+
+Always extract by explicit timeUs.
+
+
+
+
+3. Transition not executed / only first transition ran
+
+When introducing shared GL/EGL context for transitions, only the first transition executed.
+
+Causes:
+
+Encoder / EGLSurface lifecycle incorrectly shared or closed.
+
+Transition context ownership unclear between tasks.
+
+
+Required separation:
+
+Shared: EglCore, GL programs, TexturePool
+
+Per-transition: MediaCodec, input Surface, EglSurfaceWrapper
+
+
+
+
+4. Channel-based pipeline issues
+
+Consumer stopped early while channel still had data
+
+EOS handling inconsistent:
+
+Some extractors relied on timestamps instead of explicit BUFFER_FLAG_END_OF_STREAM.
+
+
+Fix:
+
+Always push an explicit EOS buffer into MediaCodecChannel
+
+Writer must terminate on EOS, not timestamp comparison
+
+
+
+
+5. Overlap trimming logic incorrect
+
+Initial logic trimmed previous video, but correct behavior is:
+
+Video 1 runs full
+
+Video 2 starts after overlap with Video 1
+
+Video 3 starts after overlap with Video 2
+
+
+lastTransferredTimestampUs and maxDuration were not updated consistently.
+
+
+
+6. Progress calculation incorrect
+
+Reported progress exceeded total (e.g. 542 / 512 frames).
+
+Causes:
+
+Transition frames added, but:
+
+Also counted again via onEachFrameTransferred / onEachFrameTranscoded
+
+
+ProgressTracker mixed TIME and FRAME semantics inconsistently.
+
+
+Fix direction:
+
+Count transition frames explicitly and only once
+
+Do not double-count frames emitted by multiple pipelines
+
+
+
+
+7. Rotation / normalization errors in transition frames
+
+Transition frames appeared flipped or inverted compared to transfer/transcode frames.
+
+Issues found:
+
+Rotation already applied earlier in pipeline, but FrameNormalizer applied again.
+
+Inconsistent coordinate system between:
+
+Bitmap → GL texture
+
+SurfaceTexture / ImageWriter output
+
+
+Special case: 180° rotation caused horizontal flip
+
+
+Root cause:
+
+Mixing rotation and mirror compensation in multiple stages (vertex + fragment).
+
+
+Fix direction:
+
+Normalize to single rotation domain
+
+Centralize rotation mapping (e.g. (180 - rotation) % 360)
+
+Avoid implicit Y-flip assumptions between bitmap and GL
+
+
+
+
+8. Green frame issue (decoder → ImageWriter path)
+
+Output frames became fully green when one file required transcode and had rotation (90 / 270).
+
+Dumping dump_dst showed green already after UniImgp.
+
+Root cause:
+
+Incorrect row/column handling after rotation
+
+Fixed by correcting width/height (row/col) logic in rotated output buffer.
+
+
+
+
+
+
+---
+
+Overall Root Themes
+
+Inconsistent lifecycle ownership (codec, EGL, GL)
+
+MIME / CSD mismatches between transfer vs transcode paths
+
+Rotation applied multiple times in different domains
+
+EOS and progress tracking not unified across pipelines
+
+Channel-based pipeline needed stricter contracts
+
+
+
+---
+
+Nếu bạn muốn, mình có thể:
+
+Rút gọn thành 5 bullet executive summary
+
+Hoặc viết thành email / Gerrit comment / design note
