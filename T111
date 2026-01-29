@@ -1,0 +1,175 @@
+Ok, đi thẳng vào đúng chỗ bạn hỏi nhé 👍
+Dưới đây là code dump chuẩn để đặt trực tiếp trong writeTrack(channel), dùng để debug encoder output → muxer (case video/avc lỗi frame).
+
+Mình giả định:
+
+channel = output channel từ encoder
+
+bufferInfo là MediaCodec.BufferInfo
+
+byteBuffer là data chuẩn bị writeSampleData
+
+
+
+---
+
+1️⃣ Dump H.264 ngay trong writeTrack(channel)
+
+🔹 Code mẫu (AN TOÀN – KHÔNG ẢNH HƯỞNG LOGIC)
+
+class AvcDumper(private val file: File) {
+    private val fos = FileOutputStream(file)
+
+    fun dump(buffer: ByteBuffer, info: MediaCodec.BufferInfo) {
+        if (info.size <= 0) return
+
+        val oldPos = buffer.position()
+        val oldLimit = buffer.limit()
+
+        buffer.position(info.offset)
+        buffer.limit(info.offset + info.size)
+
+        val data = ByteArray(info.size)
+        buffer.get(data)
+        fos.write(data)
+
+        buffer.position(oldPos)
+        buffer.limit(oldLimit)
+    }
+
+    fun close() {
+        fos.flush()
+        fos.close()
+    }
+}
+
+
+---
+
+2️⃣ Dùng dumper trong writeTrack(channel)
+
+private val videoDumper =
+    AvcDumper(File(context.cacheDir, "dump_encoder_output.h264"))
+
+fun writeTrack(
+    channel: BufferChannel,
+    byteBuffer: ByteBuffer,
+    bufferInfo: MediaCodec.BufferInfo
+) {
+    // === DEBUG DUMP ===
+    if (channel.mimeType == "video/avc") {
+        videoDumper.dump(byteBuffer, bufferInfo)
+
+        Log.d("DUMP_AVC", """
+            PTS=${bufferInfo.presentationTimeUs}
+            size=${bufferInfo.size}
+            flags=${bufferInfo.flags}
+            keyframe=${bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0}
+            config=${bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0}
+        """.trimIndent())
+    }
+
+    // === NORMAL FLOW ===
+    mediaMuxer.writeSampleData(
+        channel.trackIndex,
+        byteBuffer,
+        bufferInfo
+    )
+}
+
+📁 Output file:
+
+/data/data/xxx/cache/dump_encoder_output.h264
+
+
+---
+
+3️⃣ Check file dump
+
+ffplay -f h264 dump_encoder_output.h264
+
+Kết quả:
+
+❌ Nếu lỗi frame → encoder output đã sai
+
+✔ Nếu OK → lỗi ở muxer / track config
+
+
+
+---
+
+4️⃣ Dump riêng từng channel (nếu nhiều encoder)
+
+Nếu bạn có nhiều channel:
+
+val dumpers = mutableMapOf<Int, AvcDumper>()
+
+fun getDumper(trackIndex: Int): AvcDumper {
+    return dumpers.getOrPut(trackIndex) {
+        AvcDumper(File(context.cacheDir, "dump_track_$trackIndex.h264"))
+    }
+}
+
+getDumper(channel.trackIndex).dump(byteBuffer, bufferInfo)
+
+
+---
+
+5️⃣ LỖI RẤT HAY GẶP (đọc kỹ đoạn này)
+
+❗ Không dump codec config
+
+Nếu bạn skip BUFFER_FLAG_CODEC_CONFIG, file dump sẽ không play được
+
+👉 Dump TẤT CẢ, kể cả config:
+
+// KHÔNG if (flags & CONFIG) skip
+
+
+---
+
+❗ ByteBuffer bị modify trước khi mux
+
+❌ Sai:
+
+byteBuffer.position(info.offset + info.size)
+
+✔ Đúng:
+
+Luôn restore position/limit sau dump
+
+
+
+---
+
+6️⃣ Debug sâu hơn (rất hợp case của bạn)
+
+Log thêm:
+
+if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+    Log.w("DUMP_AVC", "EOS received at PTS=${bufferInfo.presentationTimeUs}")
+}
+
+👉 Nếu EOS đến trước frame cuối → chính là bug bạn đang gặp.
+
+
+---
+
+7️⃣ Bạn nên làm tiếp bước nào?
+
+Mình đề xuất thứ tự:
+
+1. Dump encoder output H264 (code trên)
+
+
+2. ffplay kiểm tra
+
+
+3. Nếu OK → mình sẽ giúp bạn fix muxer / track / csd
+
+
+4. Nếu lỗi → soi encoder config / PTS / GL render
+
+
+
+👉 Nếu bạn muốn, paste luôn writeTrack() hiện tại, mình sẽ gạch đỏ chính xác dòng gây lỗi cho case avc-only của bạn.
