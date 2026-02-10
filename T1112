@@ -1,0 +1,202 @@
+object HevcSpsParser {
+
+    fun parseAndReturn(spsNal: ByteArray): HevcSpsData {
+        // skip start code + nal header (00 00 00 01 + 2 bytes)
+        val rbsp = removeEmulationBytes(spsNal.copyOfRange(6, spsNal.size))
+        val br = BitReader(rbsp)
+
+        br.readBits(4) // sps_video_parameter_set_id
+        val maxSubLayersMinus1 = br.readBits(3)
+        br.readBits(1) // temporal_id_nesting_flag
+
+        val (profileIdc, levelIdc) =
+            parseProfileTierLevel(br, maxSubLayersMinus1)
+
+        val spsId = br.readUE()
+
+        val chromaFormatIdc = br.readUE()
+        if (chromaFormatIdc == 3) br.readBits(1)
+
+        val picWidthInLumaSamples = br.readUE()
+        val picHeightInLumaSamples = br.readUE()
+
+        var confLeft = 0
+        var confRight = 0
+        var confTop = 0
+        var confBottom = 0
+
+        if (br.readBits(1) == 1) {
+            confLeft = br.readUE()
+            confRight = br.readUE()
+            confTop = br.readUE()
+            confBottom = br.readUE()
+        }
+
+        val subWidthC = if (chromaFormatIdc == 1 || chromaFormatIdc == 2) 2 else 1
+        val subHeightC = if (chromaFormatIdc == 1) 2 else 1
+
+        val width =
+            picWidthInLumaSamples - (confLeft + confRight) * subWidthC
+        val height =
+            picHeightInLumaSamples - (confTop + confBottom) * subHeightC
+
+        val bitDepthLuma = br.readUE() + 8
+        val bitDepthChroma = br.readUE() + 8
+
+        br.readUE() // log2_max_pic_order_cnt_lsb_minus4
+        br.readBits(1) // sps_sub_layer_ordering_info_present_flag
+
+        for (i in 0..maxSubLayersMinus1) {
+            br.readUE()
+            br.readUE()
+            br.readUE()
+        }
+
+        br.readUE()
+        br.readUE()
+        br.readUE()
+        br.readUE()
+        br.readUE()
+        br.readUE()
+
+        var videoFormat = 5   // unspecified
+        var fullRange = false
+        var colourPrimaries: Int? = null
+        var transfer: Int? = null
+        var matrix: Int? = null
+
+        val vuiPresent = br.readBits(1) == 1
+        if (vuiPresent) {
+            if (br.readBits(1) == 1) { // aspect_ratio_info_present_flag
+                val aspectIdc = br.readBits(8)
+                if (aspectIdc == 255) {
+                    br.readBits(16)
+                    br.readBits(16)
+                }
+            }
+
+            if (br.readBits(1) == 1) br.readBits(1) // overscan
+
+            if (br.readBits(1) == 1) {
+                videoFormat = br.readBits(3)
+                fullRange = br.readBits(1) == 1
+
+                if (br.readBits(1) == 1) {
+                    colourPrimaries = br.readBits(8)
+                    transfer = br.readBits(8)
+                    matrix = br.readBits(8)
+                }
+            }
+        }
+
+        return HevcSpsData(
+            spsId = spsId,
+            width = width,
+            height = height,
+            profileIdc = profileIdc,
+            levelIdc = levelIdc,
+            maxSubLayers = maxSubLayersMinus1,
+            chromaFormatIdc = chromaFormatIdc,
+            chromaFormat = chromaName(chromaFormatIdc),
+            bitDepthLuma = bitDepthLuma,
+            bitDepthChroma = bitDepthChroma,
+            videoFormat = videoFormat,
+            videoFullRange = fullRange,
+            colourPrimaries = colourPrimaries,
+            transferCharacteristics = transfer,
+            matrixCoeffs = matrix
+        )
+    }
+
+    private fun parseProfileTierLevel(
+        br: BitReader,
+        maxSubLayersMinus1: Int
+    ): Pair<Int, Int> {
+        br.readBits(2)
+        br.readBits(1)
+        val profileIdc = br.readBits(5)
+
+        br.readBits(32)
+        br.readBits(48)
+        val levelIdc = br.readBits(8)
+
+        val subProfilePresent = BooleanArray(maxSubLayersMinus1)
+        val subLevelPresent = BooleanArray(maxSubLayersMinus1)
+
+        for (i in 0 until maxSubLayersMinus1) {
+            subProfilePresent[i] = br.readBits(1) == 1
+            subLevelPresent[i] = br.readBits(1) == 1
+        }
+
+        if (maxSubLayersMinus1 > 0) {
+            repeat(8 - maxSubLayersMinus1) { br.readBits(2) }
+        }
+
+        for (i in 0 until maxSubLayersMinus1) {
+            if (subProfilePresent[i]) {
+                br.readBits(2)
+                br.readBits(1)
+                br.readBits(5)
+                br.readBits(32)
+                br.readBits(48)
+            }
+            if (subLevelPresent[i]) br.readBits(8)
+        }
+
+        return profileIdc to levelIdc
+    }
+
+    private fun chromaName(idc: Int) =
+        when (idc) {
+            0 -> "Monochrome"
+            1 -> "4:2:0"
+            2 -> "4:2:2"
+            3 -> "4:4:4"
+            else -> "Unknown"
+        }
+
+    private fun removeEmulationBytes(data: ByteArray): ByteArray {
+        val out = ArrayList<Byte>()
+        var i = 0
+        while (i < data.size) {
+            if (i + 2 < data.size &&
+                data[i] == 0.toByte() &&
+                data[i + 1] == 0.toByte() &&
+                data[i + 2] == 3.toByte()
+            ) {
+                out.add(0)
+                out.add(0)
+                i += 3
+            } else {
+                out.add(data[i])
+                i++
+            }
+        }
+        return out.toByteArray()
+    }
+}
+
+
+
+data class HevcSpsData(
+    val spsId: Int,
+    val width: Int,
+    val height: Int,
+
+    val profileIdc: Int,
+    val levelIdc: Int,
+    val maxSubLayers: Int,
+
+    val chromaFormatIdc: Int,
+    val chromaFormat: String,
+
+    val bitDepthLuma: Int,
+    val bitDepthChroma: Int,
+
+    val videoFormat: Int,
+    val videoFullRange: Boolean,
+
+    val colourPrimaries: Int?,
+    val transferCharacteristics: Int?,
+    val matrixCoeffs: Int?
+)
