@@ -1,0 +1,360 @@
+Dưới đây là version parse HEVC SPS đầy đủ phần VUI, bao gồm:
+
+✅ width / height
+
+✅ profile_idc / level_idc
+
+✅ chroma_format_idc
+
+✅ bit_depth
+
+✅ VUI
+
+colour_primaries
+
+transfer_characteristics
+
+matrix_coeffs
+
+video_full_range_flag
+
+aspect_ratio
+
+timing_info (nếu có)
+
+
+
+> ⚠️ Giả định:
+
+Đã remove start code (0x000001)
+
+Đã remove emulation prevention bytes (0x03)
+
+ByteArray truyền vào là SPS NAL hoàn chỉnh
+
+
+
+
+
+---
+
+✅ Full HEVC SPS + VUI Parser (Kotlin)
+
+
+---
+
+1️⃣ HevcSpsParser
+
+object HevcSpsParser {
+
+    data class SpsInfo(
+        val width: Int,
+        val height: Int,
+        val profileIdc: Int,
+        val levelIdc: Int,
+        val chromaFormatIdc: Int,
+        val bitDepthLuma: Int,
+        val bitDepthChroma: Int,
+        val vui: VuiInfo?
+    )
+
+    data class VuiInfo(
+        val aspectRatioIdc: Int?,
+        val sarWidth: Int?,
+        val sarHeight: Int?,
+        val videoFullRangeFlag: Boolean?,
+        val colourPrimaries: Int?,
+        val transferCharacteristics: Int?,
+        val matrixCoeffs: Int?,
+        val numUnitsInTick: Long?,
+        val timeScale: Long?
+    )
+
+    fun parse(data: ByteArray): SpsInfo {
+
+        val br = BitReader(data)
+
+        // ---- NAL HEADER ----
+        br.readBits(16)
+
+        br.readBits(4) // sps_video_parameter_set_id
+        val maxSubLayersMinus1 = br.readBits(3)
+        br.readBits(1) // temporal nesting flag
+
+        val profileTier = parseProfileTierLevel(br, maxSubLayersMinus1)
+
+        br.readUE() // sps_seq_parameter_set_id
+
+        val chromaFormatIdc = br.readUE()
+        if (chromaFormatIdc == 3) {
+            br.readBits(1)
+        }
+
+        val width = br.readUE()
+        val height = br.readUE()
+
+        val conformanceWindowFlag = br.readBits(1)
+        if (conformanceWindowFlag == 1) {
+            br.readUE()
+            br.readUE()
+            br.readUE()
+            br.readUE()
+        }
+
+        val bitDepthLumaMinus8 = br.readUE()
+        val bitDepthChromaMinus8 = br.readUE()
+
+        br.readUE() // log2_max_pic_order_cnt_lsb_minus4
+        br.readBits(1) // sps_sub_layer_ordering_info_present_flag
+
+        for (i in 0..maxSubLayersMinus1) {
+            br.readUE()
+            br.readUE()
+            br.readUE()
+        }
+
+        br.readUE()
+        br.readUE()
+        br.readUE()
+        br.readUE()
+        br.readUE()
+        br.readUE()
+
+        br.readBits(1) // scaling_list_enabled_flag
+        br.readBits(1) // amp_enabled_flag
+        br.readBits(1) // sample_adaptive_offset_enabled_flag
+
+        val pcmEnabledFlag = br.readBits(1)
+        if (pcmEnabledFlag == 1) {
+            br.readBits(4)
+            br.readBits(4)
+            br.readUE()
+            br.readUE()
+            br.readBits(1)
+        }
+
+        val numShortTermRefPicSets = br.readUE()
+        for (i in 0 until numShortTermRefPicSets) {
+            skipShortTermRefPicSet(br)
+        }
+
+        val longTermRefPicsPresentFlag = br.readBits(1)
+        if (longTermRefPicsPresentFlag == 1) {
+            val numLongTermRefPics = br.readUE()
+            for (i in 0 until numLongTermRefPics) {
+                br.readBits(16)
+                br.readBits(1)
+            }
+        }
+
+        br.readBits(1)
+        br.readBits(1)
+
+        val vuiParametersPresentFlag = br.readBits(1)
+
+        val vui = if (vuiParametersPresentFlag == 1) {
+            parseVui(br)
+        } else null
+
+        return SpsInfo(
+            width = width,
+            height = height,
+            profileIdc = profileTier.profileIdc,
+            levelIdc = profileTier.levelIdc,
+            chromaFormatIdc = chromaFormatIdc,
+            bitDepthLuma = bitDepthLumaMinus8 + 8,
+            bitDepthChroma = bitDepthChromaMinus8 + 8,
+            vui = vui
+        )
+    }
+
+
+---
+
+2️⃣ Parse VUI
+
+private fun parseVui(br: BitReader): VuiInfo {
+
+        var aspectRatioIdc: Int? = null
+        var sarWidth: Int? = null
+        var sarHeight: Int? = null
+        var videoFullRangeFlag: Boolean? = null
+        var colourPrimaries: Int? = null
+        var transferCharacteristics: Int? = null
+        var matrixCoeffs: Int? = null
+        var numUnitsInTick: Long? = null
+        var timeScale: Long? = null
+
+        val aspectRatioInfoPresentFlag = br.readBits(1)
+        if (aspectRatioInfoPresentFlag == 1) {
+            aspectRatioIdc = br.readBits(8)
+            if (aspectRatioIdc == 255) {
+                sarWidth = br.readBits(16)
+                sarHeight = br.readBits(16)
+            }
+        }
+
+        val overscanInfoPresentFlag = br.readBits(1)
+        if (overscanInfoPresentFlag == 1) {
+            br.readBits(1)
+        }
+
+        val videoSignalTypePresentFlag = br.readBits(1)
+        if (videoSignalTypePresentFlag == 1) {
+            br.readBits(3)
+            videoFullRangeFlag = br.readBits(1) == 1
+
+            val colourDescriptionPresentFlag = br.readBits(1)
+            if (colourDescriptionPresentFlag == 1) {
+                colourPrimaries = br.readBits(8)
+                transferCharacteristics = br.readBits(8)
+                matrixCoeffs = br.readBits(8)
+            }
+        }
+
+        val chromaLocInfoPresentFlag = br.readBits(1)
+        if (chromaLocInfoPresentFlag == 1) {
+            br.readUE()
+            br.readUE()
+        }
+
+        br.readBits(1)
+        br.readBits(1)
+        br.readBits(1)
+
+        val timingInfoPresentFlag = br.readBits(1)
+        if (timingInfoPresentFlag == 1) {
+            numUnitsInTick = br.readBits(32).toLong()
+            timeScale = br.readBits(32).toLong()
+        }
+
+        return VuiInfo(
+            aspectRatioIdc,
+            sarWidth,
+            sarHeight,
+            videoFullRangeFlag,
+            colourPrimaries,
+            transferCharacteristics,
+            matrixCoeffs,
+            numUnitsInTick,
+            timeScale
+        )
+    }
+
+
+---
+
+3️⃣ ProfileTierLevel
+
+private fun parseProfileTierLevel(
+        br: BitReader,
+        maxSubLayersMinus1: Int
+    ): ProfileTierLevel {
+
+        br.readBits(2)
+        br.readBits(1)
+        val profileIdc = br.readBits(5)
+        br.readBits(32)
+        br.readBits(48)
+        val levelIdc = br.readBits(8)
+
+        val subLayerProfilePresent = BooleanArray(maxSubLayersMinus1)
+        val subLayerLevelPresent = BooleanArray(maxSubLayersMinus1)
+
+        for (i in 0 until maxSubLayersMinus1) {
+            subLayerProfilePresent[i] = br.readBits(1) == 1
+            subLayerLevelPresent[i] = br.readBits(1) == 1
+        }
+
+        if (maxSubLayersMinus1 > 0) {
+            for (i in maxSubLayersMinus1 until 8) {
+                br.readBits(2)
+            }
+        }
+
+        for (i in 0 until maxSubLayersMinus1) {
+            if (subLayerProfilePresent[i]) br.readBits(88)
+            if (subLayerLevelPresent[i]) br.readBits(8)
+        }
+
+        return ProfileTierLevel(profileIdc, levelIdc)
+    }
+
+    data class ProfileTierLevel(
+        val profileIdc: Int,
+        val levelIdc: Int
+    )
+
+
+---
+
+4️⃣ BitReader (same as before)
+
+class BitReader(private val data: ByteArray) {
+
+    private var byteOffset = 0
+    private var bitOffset = 0
+
+    fun readBit(): Int {
+        val value = (data[byteOffset].toInt() shr (7 - bitOffset)) and 1
+        bitOffset++
+        if (bitOffset == 8) {
+            bitOffset = 0
+            byteOffset++
+        }
+        return value
+    }
+
+    fun readBits(n: Int): Int {
+        var value = 0
+        repeat(n) {
+            value = (value shl 1) or readBit()
+        }
+        return value
+    }
+
+    fun readUE(): Int {
+        var zeros = 0
+        while (readBit() == 0) zeros++
+        return (1 shl zeros) - 1 + readBits(zeros)
+    }
+}
+
+
+---
+
+🎯 Quan trọng với project của bạn (merge / CSDMatcher)
+
+Khi merge HEVC segments, cần so sánh:
+
+profileIdc
+levelIdc
+chromaFormatIdc
+bitDepth
+colourPrimaries
+transferCharacteristics
+matrixCoeffs
+videoFullRangeFlag
+
+Nếu khác:
+
+decoder có thể dùng BT709 cho segment 1
+
+segment 2 lại là BT601
+
+→ gây pixel shift / color block / green frame
+
+
+
+---
+
+Nếu bạn muốn mình viết luôn:
+
+✅ compareSpsForCompatibility()
+
+✅ map colourPrimaries sang MediaFormat.COLOR_STANDARD
+
+✅ detect BT601 / BT709 / BT2020 tự động
+
+
+Nói mình biết bạn đang debug case Pixel / Oppo / Xiaomi nào nhé.
