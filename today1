@@ -1,0 +1,179 @@
+Ok 👍 mình sẽ viết lại **CSDMatcher đúng chuẩn production**,
+không so sánh quá strict (bỏ level + color metrics),
+chỉ so những field thực sự ảnh hưởng decode.
+
+Mình tách rõ **AVC** và **HEVC**.
+
+---
+
+# ✅ 1️⃣ Interface giữ nguyên
+
+```kotlin
+interface CSDMatcher {
+    fun match(first: ByteBuffer, second: ByteBuffer): Boolean
+}
+```
+
+---
+
+# ✅ 2️⃣ AVC Matcher (đã sửa đúng)
+
+```kotlin
+class AvcCSDMatcher : CSDMatcher {
+
+    override fun match(first: ByteBuffer, second: ByteBuffer): Boolean {
+        val sps1 = parseSps(first)
+        val sps2 = parseSps(second)
+
+        return sps1.isCodecCompatible(sps2)
+    }
+
+    private fun parseSps(buffer: ByteBuffer): NalUnitUtil.SpsData {
+        val data = ByteArray(buffer.remaining())
+        buffer.get(data)
+
+        // remove start code nếu có
+        val nalStart = NalUnitUtil.findNalUnit(data, 0, data.size, NalUnitUtil.NAL_SPS)
+        val unescaped = NalUnitUtil.unescapeStream(data, nalStart, data.size)
+
+        return NalUnitUtil.parseSpsNalUnit(unescaped, 0, unescaped.size)
+    }
+}
+```
+
+---
+
+## ✔ So sánh đúng chuẩn
+
+```kotlin
+fun NalUnitUtil.SpsData.isCodecCompatible(other: NalUnitUtil.SpsData): Boolean {
+    return this.width == other.width &&
+           this.height == other.height &&
+           this.profileIdc == other.profileIdc &&
+           this.constraintsFlagsAndReservedZero2Bits ==
+                   other.constraintsFlagsAndReservedZero2Bits &&
+           this.bitDepthLuma == other.bitDepthLuma &&
+           this.bitDepthChroma == other.bitDepthChroma &&
+           this.chromaFormatIdc == other.chromaFormatIdc
+}
+```
+
+---
+
+### ❌ Không so sánh:
+
+* levelIdc
+* colorRange
+* colorTransfer
+* colorSpace
+
+---
+
+# ✅ 3️⃣ HEVC Matcher (đã sửa đúng)
+
+```kotlin
+class HevcCSDMatcher : CSDMatcher {
+
+    override fun match(first: ByteBuffer, second: ByteBuffer): Boolean {
+        val sps1 = parseHevcSps(first)
+        val sps2 = parseHevcSps(second)
+
+        return sps1.isCodecCompatible(sps2)
+    }
+
+    private fun parseHevcSps(buffer: ByteBuffer): HevcSpsData {
+        val data = ByteArray(buffer.remaining())
+        buffer.get(data)
+
+        // remove start code nếu có
+        val unescapedLength = NalUnitUtil.unescapeStream(data, 0, data.size)
+        val unescaped = data.copyOf(unescapedLength)
+
+        val bitArray = ParsableBitArray(unescaped)
+
+        bitArray.skipBits(16) // NAL header
+
+        return HevcSpsParser.parse(bitArray)
+    }
+}
+```
+
+---
+
+# ✅ HEVC Data class
+
+```kotlin
+data class HevcSpsData(
+    val width: Int,
+    val height: Int,
+    val profileSpace: Int,
+    val tierFlag: Boolean,
+    val profileIdc: Int,
+    val bitDepthLuma: Int,
+    val bitDepthChroma: Int,
+    val chromaFormatIdc: Int
+)
+```
+
+---
+
+# ✅ So sánh đúng chuẩn HEVC
+
+```kotlin
+fun HevcSpsData.isCodecCompatible(other: HevcSpsData): Boolean {
+    return width == other.width &&
+           height == other.height &&
+           profileSpace == other.profileSpace &&
+           tierFlag == other.tierFlag &&
+           profileIdc == other.profileIdc &&
+           bitDepthLuma == other.bitDepthLuma &&
+           bitDepthChroma == other.bitDepthChroma &&
+           chromaFormatIdc == other.chromaFormatIdc
+}
+```
+
+---
+
+# 🎯 Quan trọng
+
+## Chỉ so:
+
+| Field            | Vì sao             |
+| ---------------- | ------------------ |
+| width/height     | resolution         |
+| profile          | decoder capability |
+| bit depth        | 8bit / 10bit       |
+| chroma format    | 420 / 422          |
+| constraint flags | AVC only           |
+
+---
+
+## Không so:
+
+| Field              | Vì sao                 |
+| ------------------ | ---------------------- |
+| levelIdc           | encoder tự chọn        |
+| colorPrimaries     | chỉ render             |
+| matrixCoefficients | chỉ render             |
+| transfer           | chỉ render             |
+| videoFormat        | không ảnh hưởng decode |
+
+---
+
+# 🚀 Kết quả
+
+Sau khi sửa:
+
+* Merge Pixel khác color metrics → vẫn pass
+* Merge level khác nhau → vẫn pass
+* Chỉ reject khi thật sự khác codec capability
+
+---
+
+Nếu bạn muốn mình viết luôn:
+
+* version tolerant (cho phép width lệch 1-2 pixel)
+* version check chỉ profile + bitdepth (siêu loose)
+* hoặc version strict hơn cho production muxer
+
+Nói mình biết bạn đang dùng trong pipeline nào nhé 👌
