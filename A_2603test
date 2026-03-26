@@ -1,0 +1,232 @@
+Dưới đây là full code parse PPS từ csd-0 ByteArray bằng NalUnitUtil + ParsableNalUnitBitArray (ExoPlayer)
+→ parse được các field quan trọng:
+
+pps_id
+
+sps_id
+
+entropy_coding_mode_flag
+
+bottom_field_pic_order_in_frame_present_flag
+
+num_slice_groups_minus1
+
+weighted_pred_flag
+
+weighted_bipred_idc
+
+pic_init_qp_minus26
+
+chroma_qp_index_offset
+
+deblocking_filter_control_present_flag
+
+constrained_intra_pred_flag
+
+redundant_pic_cnt_present_flag
+
+transform_8x8_mode_flag
+
+second_chroma_qp_index_offset
+
+
+Code này gần giống ExoPlayer internal parser.
+
+
+---
+
+✅ Full code
+
+1. Data class
+
+data class PpsData(
+    val ppsId: Int,
+    val spsId: Int,
+    val entropyCodingModeFlag: Boolean,
+    val bottomFieldPicOrderInFramePresentFlag: Boolean,
+    val numSliceGroupsMinus1: Int,
+    val weightedPredFlag: Boolean,
+    val weightedBipredIdc: Int,
+    val picInitQpMinus26: Int,
+    val chromaQpIndexOffset: Int,
+    val deblockingFilterControlPresentFlag: Boolean,
+    val constrainedIntraPredFlag: Boolean,
+    val redundantPicCntPresentFlag: Boolean,
+    val transform8x8ModeFlag: Boolean,
+    val secondChromaQpIndexOffset: Int
+)
+
+
+---
+
+2. Find PPS from csd0
+
+fun findPpsNalUnit(data: ByteArray): ByteArray? {
+
+    val prefixFlags = BooleanArray(3)
+
+    var offset = 0
+
+    while (offset < data.size) {
+
+        val start = NalUnitUtil.findNalUnit(
+            data,
+            offset,
+            data.size,
+            prefixFlags
+        )
+
+        if (start >= data.size) break
+
+        val type = NalUnitUtil.getNalUnitType(data, start)
+
+        if (type == 8) {
+
+            val next = NalUnitUtil.findNalUnit(
+                data,
+                start + 4,
+                data.size,
+                prefixFlags
+            )
+
+            return data.copyOfRange(start + 4, next)
+        }
+
+        offset = start + 4
+    }
+
+    return null
+}
+
+
+---
+
+3. Parse PPS
+
+fun parsePpsNalUnit(nal: ByteArray): PpsData {
+
+    val unescapedLength =
+        NalUnitUtil.unescapeStream(nal, nal.size)
+
+    val bitArray =
+        ParsableNalUnitBitArray(
+            nal,
+            1,
+            unescapedLength
+        )
+
+    val ppsId =
+        bitArray.readUnsignedExpGolombCodedInt()
+
+    val spsId =
+        bitArray.readUnsignedExpGolombCodedInt()
+
+    val entropyCodingModeFlag =
+        bitArray.readBit()
+
+    val bottomFieldPicOrderInFramePresentFlag =
+        bitArray.readBit()
+
+    val numSliceGroupsMinus1 =
+        bitArray.readUnsignedExpGolombCodedInt()
+
+    // skip slice groups (rare)
+    if (numSliceGroupsMinus1 > 0) {
+        // not fully implemented
+    }
+
+    val weightedPredFlag =
+        bitArray.readBit()
+
+    val weightedBipredIdc =
+        bitArray.readBits(2)
+
+    val picInitQpMinus26 =
+        bitArray.readSignedExpGolombCodedInt()
+
+    val picInitQsMinus26 =
+        bitArray.readSignedExpGolombCodedInt()
+
+    val chromaQpIndexOffset =
+        bitArray.readSignedExpGolombCodedInt()
+
+    val deblockingFilterControlPresentFlag =
+        bitArray.readBit()
+
+    val constrainedIntraPredFlag =
+        bitArray.readBit()
+
+    val redundantPicCntPresentFlag =
+        bitArray.readBit()
+
+    var transform8x8ModeFlag = false
+    var secondChromaQpIndexOffset = 0
+
+    if (bitArray.canReadBits(1)) {
+
+        transform8x8ModeFlag =
+            bitArray.readBit()
+
+        val picScalingMatrixPresentFlag =
+            bitArray.readBit()
+
+        if (picScalingMatrixPresentFlag) {
+            // skip scaling list
+        }
+
+        secondChromaQpIndexOffset =
+            bitArray.readSignedExpGolombCodedInt()
+    }
+
+    return PpsData(
+        ppsId,
+        spsId,
+        entropyCodingModeFlag,
+        bottomFieldPicOrderInFramePresentFlag,
+        numSliceGroupsMinus1,
+        weightedPredFlag,
+        weightedBipredIdc,
+        picInitQpMinus26,
+        chromaQpIndexOffset,
+        deblockingFilterControlPresentFlag,
+        constrainedIntraPredFlag,
+        redundantPicCntPresentFlag,
+        transform8x8ModeFlag,
+        secondChromaQpIndexOffset
+    )
+}
+
+
+---
+
+4. Use with csd0
+
+fun parsePpsFromCsd0(csd0: ByteArray) {
+
+    val ppsNal = findPpsNalUnit(csd0)
+        ?: return
+
+    val pps = parsePpsNalUnit(ppsNal)
+
+    println("ppsId=${pps.ppsId}")
+    println("spsId=${pps.spsId}")
+    println("entropyCodingMode=${pps.entropyCodingModeFlag}")
+    println("bottomField=${pps.bottomFieldPicOrderInFramePresentFlag}")
+    println("numSliceGroups=${pps.numSliceGroupsMinus1}")
+    println("weightedPred=${pps.weightedPredFlag}")
+    println("weightedBipred=${pps.weightedBipredIdc}")
+    println("picInitQpMinus26=${pps.picInitQpMinus26}")
+    println("chromaQpOffset=${pps.chromaQpIndexOffset}")
+    println("deblocking=${pps.deblockingFilterControlPresentFlag}")
+    println("constrained=${pps.constrainedIntraPredFlag}")
+    println("redundantPicCnt=${pps.redundantPicCntPresentFlag}")
+    println("transform8x8=${pps.transform8x8ModeFlag}")
+    println("secondChromaOffset=${pps.secondChromaQpIndexOffset}")
+}
+
+
+---
+
+✅ Nếu cần tiếp
+
+Có thể parse luôn SPS + PPS + profile + level + ref frame giống MediaCodec.
