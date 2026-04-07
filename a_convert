@@ -1,0 +1,245 @@
+Mình phân tích thẳng vào code của bạn + cách sửa **đúng chỗ** nhé 👇
+
+---
+
+# 🔍 1. Flow hiện tại của bạn
+
+Từ test:
+
+```kotlin
+val motionPhotoEdit = MotionPhotoInfo.parse(outputFile).edit()
+motionPhotoEdit.addVideo(...)
+motionPhotoEdit.commit(outputFile)
+```
+
+👉 Nghĩa là:
+
+```
+parse → MotionPhotoInfoImpl
+        → xmpInfo (XMPInfoImpl)
+        → sefInfo
+→ edit() → MotionPhotoEditImpl
+→ commit()
+```
+
+---
+
+# 🔥 2. XMP đang được xử lý ở đâu?
+
+### 📌 Trong `MotionPhotoInfoImpl`
+
+```kotlin
+private val xmpInfo: MotionPhotoXMPDelegate by lazy {
+    MotionPhotoXMPDelegate.of(mediaFile, exifIno)
+}
+```
+
+→ XMP được load từ file
+
+---
+
+### 📌 Trong `XMPInfoImpl`
+
+```kotlin
+xmpArray = ImageMetaReader.of(mediaFile).getXMP()?.data
+xmpArray = removeXMPHeaderIfExists(xmpArray)
+```
+
+👉 Tức là:
+
+* đọc XMP cũ từ file
+* parse thành object
+
+---
+
+### 📌 Khi commit
+
+```kotlin
+if (xmpEdit.isDirty) {
+    xmpEdit.commit(outputFile)
+}
+```
+
+→ ghi XMP lại file
+
+---
+
+# ❗ Vấn đề của bạn
+
+Hiện tại:
+
+* XMP cũ (Live Photo) vẫn còn
+* Bạn chỉ **add thêm video + update XMP**
+  → dẫn đến:
+* XMP bị merge / conflict / placement sai
+* Google Photos fail
+
+---
+
+# ✅ 3. Cách remove XMP cũ + tạo mới
+
+## ✔️ Cách 1 (đơn giản nhất – nên dùng)
+
+👉 Dùng API có sẵn:
+
+```kotlin
+motionPhotoEdit.removeAllData()
+```
+
+### ✔️ Nó làm gì:
+
+```kotlin
+sefEdit.removeData(...)
+xmpEdit.removeProperty(...)
+xmpEdit.removeItem(...)
+```
+
+→ XÓA:
+
+* MotionPhoto XMP
+* SEF
+* Video info
+
+👉 Sau đó:
+
+```kotlin
+motionPhotoEdit.addVideo(...)
+motionPhotoEdit.commit()
+```
+
+→ `prepareXMP()` sẽ tự tạo lại XMP mới
+
+---
+
+## ⚠️ Nhưng vấn đề
+
+`removeAllData()`:
+
+* ❌ KHÔNG xóa toàn bộ XMP (Apple metadata vẫn còn)
+* chỉ xóa MotionPhoto fields
+
+---
+
+# 🔥 4. Cách đúng để “remove hoàn toàn XMP”
+
+## ✔️ Cách chuẩn (HEIC)
+
+Bạn cần gọi:
+
+```kotlin
+ImageMetaWriter.of(file).removeXMP()
+```
+
+👉 trong:
+
+```kotlin
+HEIFMetaWriterBase.removeXMP()
+```
+
+---
+
+## ✔️ Sau đó:
+
+```kotlin
+val mpEdit = MotionPhotoInfo.parse(file).edit()
+
+mpEdit.addVideo(...)
+mpEdit.commit()
+```
+
+→ lúc này:
+
+```kotlin
+XMPInfoImpl.createEmptyXMPBuffer()
+```
+
+→ tạo XMP sạch
+
+---
+
+# 🎯 5. Cách integrate vào code của bạn
+
+## ✔️ Update convert()
+
+```kotlin
+fun convert(): File {
+    val file = outputFile
+
+    // 🔥 STEP 1: remove XMP cũ
+    ImageMetaWriter.of(file).removeXMP()
+
+    val motionPhotoEdit = MotionPhotoInfo.parse(file).edit()
+
+    motionPhotoEdit.addVideo(livePhotoVideo)
+
+    motionPhotoEdit.commit(file)
+
+    return file
+}
+```
+
+---
+
+# 💥 6. Insight rất quan trọng
+
+## ❗ Nếu không remove XMP:
+
+```kotlin
+xmpEdit.copyTo(...)
+```
+
+→ merge metadata
+
+→ chính là root cause bug của bạn
+
+---
+
+## ✔️ Nếu remove XMP:
+
+* XMP mới sẽ được tạo bởi:
+
+```kotlin
+fillMotionPhotoDataInXMP()
+completeCommit()
+```
+
+→ đúng chuẩn Motion Photo
+
+---
+
+# 🚀 7. Kết luận
+
+### ✔️ Bạn HOÀN TOÀN làm được:
+
+* remove XMP cũ
+* tạo XMP mới
+
+---
+
+### ✔️ Cách đúng nhất:
+
+1. `ImageMetaWriter.removeXMP()` 🔥
+2. `MotionPhotoEdit.addVideo()`
+3. `commit()`
+
+---
+
+### ❌ Không nên:
+
+* merge XMP
+* giữ Apple XMP
+* rely vào `removeAllData()` (chưa đủ)
+
+---
+
+# 🎯 TL;DR
+
+> ✔️ Remove XMP bằng writer (level container)
+> ✔️ Sau đó để MotionPhotoEdit tạo XMP mới
+> ❌ Không sửa ở level XML string
+
+---
+
+Nếu bạn muốn, mình có thể:
+👉 chỉ chính xác tại sao XMP của bạn đang bị nhét vào `mdat`
+→ và cách fix triệt để để Google Photos nhận 👍
