@@ -1,0 +1,586 @@
+Here is your full 15-slide PowerPoint content in English, designed so you can present confidently (10–15 minutes). Each slide includes clear bullet points + speaker notes.
+
+
+---
+
+🎯 SLIDE 1 — Title
+
+DeepN-JPEG: A Deep Neural Network Favorable JPEG Compression Framework
+
+Presenter: (Your name)
+
+Topic: AI-aware Image Compression
+
+
+Speaker notes
+
+> Today I will present a paper called DeepN-JPEG, which proposes a new way to adapt JPEG compression for deep neural networks.
+
+
+
+
+---
+
+🧩 SLIDE 2 — Background
+
+Why Image Compression Matters
+
+Images dominate data storage and transmission
+
+Compression reduces bandwidth and storage cost
+
+JPEG is the most widely used format
+
+
+Speaker notes
+
+> Image compression is essential in modern systems. JPEG is the standard due to its simplicity and efficiency.
+
+
+
+
+---
+
+❗ SLIDE 3 — Problem
+
+JPEG is Not Designed for AI
+
+Optimized for human perception
+
+Removes visually insignificant details
+
+These details may be important for CNNs
+
+
+Speaker notes
+
+> JPEG works well for humans, but not necessarily for machines. Neural networks may lose critical information.
+
+
+
+
+---
+
+🧠 SLIDE 4 — Key Insight
+
+Human Vision ≠ Machine Vision
+
+Humans:
+
+Sensitive to low-frequency information
+
+
+CNNs:
+
+Use both low and high-frequency features
+
+
+
+Speaker notes
+
+> Neural networks rely on subtle patterns, including high-frequency components that JPEG often discards.
+
+
+
+
+---
+
+⚙️ SLIDE 5 — JPEG Pipeline
+
+Steps
+
+Split image into 8×8 blocks
+
+Apply DCT (Discrete Cosine Transform)
+
+Quantization
+
+Encoding
+
+
+Speaker notes
+
+> Among these steps, quantization is where most information loss occurs.
+
+
+
+
+---
+
+⚠️ SLIDE 6 — Quantization Issue
+
+Why JPEG Hurts AI Performance
+
+Uses fixed quantization tables
+
+Removes high-frequency details
+
+Not adaptive to specific tasks
+
+
+Speaker notes
+
+> The fixed quantization table is the main limitation. It does not consider what neural networks actually need.
+
+
+
+
+---
+
+💡 SLIDE 7 — Proposed Solution
+
+DeepN-JPEG
+
+Make JPEG AI-aware
+
+Learnable quantization table
+
+Optimize for neural network performance
+
+
+Speaker notes
+
+> The idea is simple but powerful: instead of using fixed rules, we learn how to compress.
+
+
+
+
+---
+
+🧠 SLIDE 8 — Framework Overview
+
+Pipeline
+
+1. Input image
+
+
+2. JPEG compression (learnable Q-table)
+
+
+3. Decompression
+
+
+4. CNN model
+
+
+5. Loss calculation
+
+
+
+Speaker notes
+
+> Compression is integrated into the training loop of the neural network.
+
+
+
+
+---
+
+🔄 SLIDE 9 — Training Process
+
+End-to-End Learning
+
+Forward pass:
+
+Compress → Decompress → Predict
+
+
+Backward pass:
+
+Update quantization table
+
+
+
+Speaker notes
+
+> The system learns how to compress images while preserving useful features for the task.
+
+
+
+
+---
+
+📉 SLIDE 10 — Loss Function
+
+Multi-objective Optimization
+
+Classification loss (e.g., cross-entropy)
+
+Compression constraint
+
+
+Speaker notes
+
+> The loss function balances accuracy and compression efficiency.
+
+
+
+
+---
+
+⚖️ SLIDE 11 — Trade-off
+
+Accuracy vs Compression
+
+Strong compression → lower accuracy
+
+DeepN-JPEG:
+
+Maintains higher accuracy
+
+
+
+Speaker notes
+
+> The goal is to keep accuracy high even when compression is strong.
+
+
+
+
+---
+
+🧪 SLIDE 12 — Experimental Results
+
+Datasets
+
+ImageNet
+
+CIFAR
+
+
+Results
+
+DeepN-JPEG outperforms standard JPEG
+
+Higher accuracy at similar bitrate
+
+
+Speaker notes
+
+> Experiments show clear improvements in performance across multiple datasets.
+
+
+
+
+---
+
+📊 SLIDE 13 — Feature Preservation
+
+Why It Works
+
+Preserves edges and textures
+
+Keeps discriminative features
+
+Improves CNN understanding
+
+
+Speaker notes
+
+> The compressed images retain important visual features for machine learning.
+
+
+
+
+---
+
+✅ SLIDE 14 — Advantages & Limitations
+
+Advantages
+
+Compatible with JPEG
+
+Improves AI performance
+
+No need for new format
+
+
+Limitations
+
+Requires retraining
+
+Task-specific optimization
+
+Not optimized for human viewing
+
+
+Speaker notes
+
+> While effective, this approach requires additional training and may not improve visual quality.
+
+
+
+
+---
+
+🚀 SLIDE 15 — Conclusion
+
+Key Takeaways
+
+JPEG is not optimal for AI
+
+DeepN-JPEG introduces task-aware compression
+
+Learnable quantization improves performance
+
+
+Future Work
+
+Fully learned compression
+
+AI-native image formats
+
+
+Speaker notes
+
+> In the future, compression methods may be fully optimized for machine understanding instead of human perception.
+
+
+
+
+---
+
+🎤 Bonus: Simple Closing Sentence
+
+> DeepN-JPEG shows that compression should not only serve humans, but also the intelligence of machines.
+
+
+
+
+---
+
+If you want, I can next:
+
+Turn this into a ready-to-download PPTX file
+
+Add animations + diagrams per slide
+
+Or write a full speaking script (word-by-word) for you to practice English speaking 🎯
+
+
+
+
+
+
+≈=============
+
+https://g.co/gemini/share/8ecb331edfc5
+
+Tuyệt vời! Để kéo dài bài thuyết trình lên 15 slide, chúng ta sẽ đi sâu hơn vào các khái niệm kỹ thuật (như cách chuẩn JPEG hoạt động, cách thuật toán tạo ra bảng lượng tử hóa mới) và thêm các phần về phương pháp thực nghiệm, gợi ý hình ảnh minh họa để bài nói của bạn thêm chuyên nghiệp và thuyết phục.
+Dưới đây là dàn ý chi tiết 15 slide:
+### Phần 1: Đặt vấn đề và Bối cảnh (Slide 1 - 6)
+**Slide 1: Tiêu đề**
+ * **Tiêu đề:** DeepN-JPEG: Khung nén ảnh JPEG tối ưu cho Mạng Nơ-ron Sâu (Deep Neural Networks)
+ * **Thông tin:** Bài báo của Zihao Liu et al., DAC 2018.
+ * **Người trình bày:** [Tên của bạn]
+ * *Gợi ý hình ảnh:* Một biểu tượng AI não bộ kết nối với biểu tượng nén file ảnh.
+**Slide 2: Bối cảnh - Kỷ nguyên của AI và IoT**
+ * **Sự bùng nổ thiết bị:** Sự gia tăng của các thiết bị Edge/IoT (camera giám sát, drone, xe tự lái).
+ * **Vai trò của AI:** Hầu hết các dữ liệu hình ảnh thu thập được không phải để người xem, mà để các mô hình Mạng nơ-ron sâu (DNN) phân tích và nhận diện.
+ * *Gợi ý hình ảnh:* Sơ đồ các camera đường phố gửi dữ liệu về máy chủ đám mây (Cloud Server).
+**Slide 3: Nút thắt cổ chai trong kiến trúc đám mây (Cloud)**
+ * **Khối lượng dữ liệu khổng lồ:** Việc gửi ảnh thô (raw) hoặc ảnh chất lượng cao lên Cloud làm cạn kiệt băng thông mạng.
+ * **Năng lượng tiêu thụ:** Việc truyền tải dữ liệu liên tục vắt kiệt pin của các thiết bị IoT di động.
+ * **Yêu cầu:** Cần phải nén ảnh thật nhỏ ngay tại thiết bị ngoại vi trước khi gửi đi.
+**Slide 4: Tổng quan về chuẩn nén JPEG truyền thống**
+ * **Phổ biến nhất:** JPEG là chuẩn nén hình ảnh được sử dụng rộng rãi nhất thế giới.
+ * **Nguyên lý cơ bản:** Chuyển đổi ảnh từ miền không gian sang miền tần số (thông qua phép biến đổi DCT - Discrete Cosine Transform).
+ * **Lượng tử hóa (Quantization):** Bước cốt lõi quyết định tỷ lệ nén, loại bỏ bớt các thông tin tần số để làm nhẹ file.
+**Slide 5: Sự khác biệt: Mắt người vs. "Mắt máy"**
+ * **Hệ thống thị giác con người (HVS):** Mắt người rất nhạy cảm với tần số thấp (màu sắc, mảng lớn) nhưng "mù mờ" với tần số cao (chi tiết hạt, góc cạnh nhỏ). JPEG được sinh ra dựa trên nguyên lý này.
+ * **Deep Neural Networks (DNN):** Máy móc "nhìn" bằng các ma trận toán học. Chúng dựa rất nhiều vào các đặc trưng tần số cao (viền, góc cạnh) để nhận diện chính xác vật thể.
+**Slide 6: Hậu quả khi dùng JPEG cho AI**
+ * **Mất mát đặc trưng quan trọng:** Khi ta ép chuẩn JPEG nén ảnh thật nhỏ để tiết kiệm băng thông, nó sẽ tự động xóa sạch các tần số cao mà mạng DNN rất cần.
+ * **Sụt giảm hiệu suất:** Mắt người nhìn ảnh nén JPEG có thể thấy vẫn ổn định, nhưng mạng AI sẽ nhận diện sai lệch hoàn toàn. Độ chính xác (Accuracy) lao dốc.
+### Phần 2: Giải pháp DeepN-JPEG (Slide 7 - 10)
+**Slide 7: Ý tưởng cốt lõi của DeepN-JPEG**
+ * **Định nghĩa:** Một khung (framework) nén ảnh dựa trên JPEG nhưng loại bỏ khái niệm "Mắt người", chuyển sang phục vụ "Mắt máy".
+ * **Tương thích ngược:** Định dạng đầu ra vẫn là file .jpg thông thường, hoàn toàn tương thích với các bộ giải mã hiện tại, không yêu cầu phần cứng giải mã mới.
+**Slide 8: Can thiệp vào Bảng Lượng tử hóa (Q-Table)**
+ * **Q-Table là gì?** Bảng ma trận 8x8 trong JPEG quyết định tần số nào bị vứt bỏ, tần số nào được giữ lại.
+ * **Điểm yếu của Q-Table mặc định:** Được thiết kế cứng nhắc cho con người.
+ * **Giải pháp của DeepN-JPEG:** Tạo ra một Q-Table hoàn toàn mới, được tối ưu hóa bằng thuật toán để phù hợp với từng mô hình AI cụ thể.
+**Slide 9: Thuật toán đánh giá tần số của DeepN-JPEG**
+ * **Phân tích độ nhạy (Sensitivity Analysis):** Thuật toán sẽ tính toán xem: Nếu thay đổi/làm mờ một dải tần số cụ thể, độ chính xác của mạng AI giảm đi bao nhiêu?
+ * **Phân loại:** * Tần số nào làm AI "bối rối" nhiều nhất -> Đánh dấu là Quan trọng (Giữ lại).
+   * Tần số nào mất đi mà AI vẫn nhận diện tốt -> Đánh dấu là Không quan trọng (Nén mạnh).
+ * *Gợi ý hình ảnh:* Biểu đồ nhiệt (Heatmap) thể hiện sự chú ý của AI đối với các tần số khác nhau.
+**Slide 10: Quá trình thiết kế Q-Table mới**
+ * **Tối ưu hóa toán học:** Đưa bài toán nén về dạng: Tối đa hóa tỷ lệ nén (Max Compression) trong điều kiện Độ chính xác không được giảm vượt quá ngưỡng cho phép (Accuracy Drop < Threshold).
+ * **Kết quả:** Một bảng Q-Table "lai", nén cực mạnh ở vùng AI không quan tâm, và giữ nguyên vẹn ở vùng AI cần phân tích.
+### Phần 3: Thực nghiệm & Kết luận (Slide 11 - 15)
+**Slide 11: Môi trường Thực nghiệm**
+ * **Tập dữ liệu (Dataset):** Sử dụng tập dữ liệu chuẩn ImageNet (rất lớn và phức tạp).
+ * **Mô hình AI kiểm thử:** Sử dụng các mạng nơ-ron nhận diện ảnh nổi tiếng: AlexNet, VGG-16, ResNet-50.
+ * **Cơ sở so sánh (Baseline):** So sánh DeepN-JPEG với chuẩn nén JPEG tiêu chuẩn (sử dụng thư viện libjpeg).
+**Slide 12: Kết quả Thực nghiệm - Tỷ lệ Nén vs Độ chính xác**
+ * **Thành tựu ấn tượng:** Đạt được tỷ lệ nén cao hơn khoảng **3.5 lần** so với JPEG thông thường mà **không làm suy giảm** độ chính xác của mô hình (Zero accuracy loss).
+ * Nếu chấp nhận giảm 1% đến 2% độ chính xác, tỷ lệ nén có thể còn đẩy lên cao hơn nữa.
+ * *Gợi ý hình ảnh:* Đưa biểu đồ dạng đường (Line chart) so sánh độ chính xác của chuẩn JPEG thường (đường cong cắm xuống) và DeepN-JPEG (đường thẳng đi ngang ổn định).
+**Slide 13: Kết quả Thực nghiệm - Hiệu suất Phần cứng & IoT**
+ * **Giảm độ trễ mạng:** Nhờ kích thước file nhỏ hơn 3.5 lần, thời gian gửi dữ liệu từ thiết bị IoT lên Cloud giảm đáng kể.
+ * **Tiết kiệm năng lượng:** Mức tiêu thụ điện năng cho chip Wifi/4G trên thiết bị ngoại vi giảm tương ứng, giúp kéo dài tuổi thọ pin cho các hệ thống camera không dây.
+**Slide 14: Kết luận và Đóng góp của nghiên cứu**
+ * **Chuyển đổi tư duy (Paradigm Shift):** Khẳng định kỷ nguyên "Machine-centric" (Lấy máy móc làm trung tâm) trong thiết kế truyền dẫn dữ liệu.
+ * **Tính ứng dụng cao:** Dễ dàng triển khai trên các hệ thống hiện tại vì vẫn sử dụng lõi chuẩn JPEG.
+ * **Tiềm năng:** Mở đường cho các chuẩn nén video phục vụ AI trong tương lai (như tối ưu hóa chuẩn H.264/H.265 cho xe tự lái).
+**Slide 15: Q&A (Hỏi & Đáp)**
+ * Tóm tắt lại 1 câu: "DeepN-JPEG giúp thiết bị nhìn thế giới theo cách của AI, nén những gì AI không cần và giữ lại những gì AI muốn."
+ * Cảm ơn giảng viên/khán giả.
+ * Mời mọi người đặt câu hỏi.
+**Mẹo khi thuyết trình:** Với dàn ý 15 slide này, hãy giữ nhịp độ trình bày đều đặn. Các slide 8, 9, 10 có tính chất kỹ thuật cao, bạn nên dùng từ ngữ dễ hiểu và mô tả thông qua các ví dụ thực tế thay vì đọc công thức nhé. Chúc bạn có một bài thuyết trình thành công!
+
+
+
+Certainly! Since this is a technical paper, presenting it in English will make your PowerPoint look professional and academic. Here is the 15-slide presentation outline translated and refined into professional English.
+### Part 1: Context and Problem Statement (Slides 1 - 6)
+**Slide 1: Title Slide**
+ * **Title:** DeepN-JPEG: A Deep Neural Network Favorable JPEG-based Image Compression Framework
+ * **Reference:** Zihao Liu et al., Design Automation Conference (DAC), 2018.
+ * **Presenter:** [Your Name]
+**Slide 2: Background - The Era of AI and IoT**
+ * **Proliferation of Devices:** Rapid growth of Edge/IoT devices (Surveillance cameras, drones, autonomous vehicles).
+ * **The Role of AI:** Most captured images are no longer for human viewing, but for analysis by Deep Neural Networks (DNNs).
+**Slide 3: The Cloud-Computing Bottleneck**
+ * **Massive Data Volume:** Transmitting raw or high-quality images consumes immense network bandwidth.
+ * **Energy Constraints:** Constant data transmission drains the battery of mobile IoT devices.
+ * **The Need:** Efficient image compression at the edge is mandatory to save power and bandwidth.
+**Slide 4: Overview of Traditional JPEG Compression**
+ * **Standard Practice:** The most widely used lossy compression format.
+ * **Core Mechanism:** Uses Discrete Cosine Transform (DCT) to move from the spatial domain to the frequency domain.
+ * **Quantization:** The "lossy" step where frequency data is discarded to reduce file size.
+**Slide 5: The Gap: Human Vision vs. Machine Vision**
+ * **Human Visual System (HVS):** Sensitive to low frequencies (colors/large shapes) but insensitive to high frequencies (fine details).
+ * **Machine Vision (DNNs):** Computers analyze matrices. High-frequency features (edges/textures) are often critical for accurate object recognition.
+**Slide 6: The Problem with Standard JPEG for AI**
+ * **Feature Loss:** Standard JPEG discards high-frequency data to please the human eye.
+ * **Performance Degradation:** Heavily compressed JPEG images lead to a sharp drop in DNN Inference Accuracy, even if the image "looks fine" to a person.
+### Part 2: The DeepN-JPEG Framework (Slides 7 - 10)
+**Slide 7: Core Concept of DeepN-JPEG**
+ * **Definition:** A framework that redesigns JPEG compression to be "Machine-centric" instead of "Human-centric."
+ * **Compatibility:** Output remains a standard .jpg file, fully compatible with existing decoders.
+**Slide 8: Innovation: Customizing the Quantization Table (Q-Table)**
+ * **What is a Q-Table?** An 8 \times 8 matrix that determines which frequencies are compressed and by how much.
+ * **Standard Q-Table:** Fixed and optimized for HVS.
+ * **DeepN-JPEG Q-Table:** Dynamically optimized for specific DNN models.
+**Slide 9: Frequency Sensitivity Analysis**
+ * **Mathematical Approach:** The framework analyzes how sensitive a DNN is to each specific frequency band.
+ * **Classification:**
+   * **Critical Frequencies:** High impact on accuracy \rightarrow Low compression (Preserved).
+   * **Redundant Frequencies:** Low impact on accuracy \rightarrow High compression (Discarded).
+**Slide 10: Optimization Process**
+ * **Optimization Goal:** Maximize the Compression Ratio (CR) while keeping the Accuracy Drop (\Delta Acc) below a predefined threshold.
+ * **Result:** A specialized Q-Table that achieves extreme compression without confusing the AI.
+### Part 3: Evaluation and Conclusion (Slides 11 - 15)
+**Slide 11: Experimental Setup**
+ * **Dataset:** ImageNet (Standard large-scale image database).
+ * **Evaluated Models:** Renowned DNNs like AlexNet, VGG-16, and ResNet-50.
+ * **Baseline:** Standard JPEG using the libjpeg library.
+**Slide 12: Results - Compression Ratio vs. Accuracy**
+ * **Key Achievement:** Achieved **~3.5x higher compression ratio** compared to standard JPEG with **Zero accuracy loss**.
+ * **Trade-off:** Further compression is possible if a 1-2% accuracy drop is acceptable.
+**Slide 13: Results - Hardware & IoT Performance**
+ * **Reduced Latency:** 3.5x smaller files mean 3.5x faster transmission.
+ * **Power Savings:** Significant reduction in radio power consumption (WiFi/LTE) on edge devices, extending battery life.
+**Slide 14: Conclusion & Contributions**
+ * **Paradigm Shift:** Moving from User-centric to Machine-centric data transmission.
+ * **Practicality:** Easy to deploy on current infrastructure.
+ * **Future Impact:** Opens doors for AI-optimized video compression (e.g., for autonomous driving).
+**Slide 15: Q&A**
+ * **Summary:** "DeepN-JPEG allows devices to see the world through the eyes of AI."
+ * Thank you for your attention!
+ * Questions?
+
+
+
+To help you understand the technical workflow of **DeepN-JPEG**, here is an additional section detailing the process. You can use these for **Slide 16 and Slide 17** to make your presentation even more thorough.
+### Slide 16: The DeepN-JPEG Workflow (Step-by-Step)
+The process is divided into two phases: **The Offline Phase** (Optimization) and **The Online Phase** (Execution).
+ 1. **Sensitivity Characterization (Offline):**
+   * The framework takes a specific DNN (e.g., ResNet) and a validation dataset.
+   * It systematically perturbs DCT coefficients in the frequency domain to measure how much each frequency affects the final prediction.
+ 2. **Q-Table Generation (Offline):**
+   * Using the sensitivity data, an optimization algorithm constructs a specialized **Quantization Table**.
+   * This table is "Machine-Friendly"—it protects the features the DNN uses to "see."
+ 3. **Image Compression (Online/At the Edge):**
+   * The IoT device captures an image.
+   * It applies the standard JPEG pipeline (DCT transformation) but uses the **DeepN-JPEG Q-Table** instead of the default one.
+ 4. **Transmission & Inference (Online/At the Cloud):**
+   * The highly compressed .jpg file is sent to the server.
+   * The server performs DNN inference directly on the reconstructed image.
+### Slide 17: Comparison of Pipelines
+| Feature | Standard JPEG Pipeline | DeepN-JPEG Pipeline |
+|---|---|---|
+| **Optimization Goal** | Visual Quality (PSNR/SSIM) | Inference Accuracy |
+| **Target Audience** | Human Eyes | Deep Neural Networks |
+| **Quantization** | General purpose (Fixed) | Task-specific (Customized) |
+| **Efficiency** | Moderate for AI tasks | High (3.5x better for AI) |
+| **Compatibility** | Standard | Standard (Backward compatible) |
+### Suggested Visuals for your PowerPoint:
+ * **For Slide 5/6:** Show a side-by-side comparison of an image compressed with Standard JPEG (showing "blocky" artifacts) and DeepN-JPEG. Even if the DeepN-JPEG one looks worse to you, explain that the **AI** prefers it because the edges are sharper.
+ * **For Slide 9:** Use a "Heatmap" visualization. Show an image where the "High-Frequency" areas (like the texture of a cat's fur) are highlighted to show what the DNN is focusing on.
+ * **For Slide 16:** Use a flow chart showing the path from **Camera -> DCT -> DeepN-JPEG Q-Table -> Cloud -> DNN Prediction.**
+### Quick Technical Summary (In case you are asked):
+> "DeepN-JPEG essentially finds the **'Blind Spots'** of a specific AI model. It compresses the data heavily in those blind spots while preserving the details in the areas where the AI is most 'attentive,' allowing for massive space savings without losing intelligence."
+> 
+
+
+
+Chào bạn, đây là nội dung chi tiết cho **15 Slide** (kèm theo các slide bổ sung về quy trình và công thức như bạn đã yêu cầu) được trình bày song ngữ **Tiếng Việt & Tiếng Anh**.
+Cấu trúc này được thiết kế chuyên nghiệp, phù hợp cho môi trường học thuật hoặc báo cáo kỹ thuật.
+### **Slide 1: Tiêu đề (Title)**
+ * **Tiếng Việt:** DeepN-JPEG: Khung nén ảnh JPEG tối ưu cho Mạng Nơ-ron Sâu.
+ * **English:** DeepN-JPEG: A Deep Neural Network Favorable JPEG-based Image Compression Framework.
+ * **Details:** Authors: Zihao Liu et al. (DAC 2018).
+ * **Presenter:** [Tên của bạn/Your Name].
+### **Slide 2: Bối cảnh (Background)**
+ * **Tiếng Việt:** Sự bùng nổ của AI và IoT. Hầu hết hình ảnh hiện nay được thu thập để "máy xem" (AI nhận diện) chứ không phải để con người xem.
+ * **English:** Proliferation of AI and IoT. Most images today are captured for "machine vision" (AI inference) rather than human viewing.
+### **Slide 3: Vấn đề - Nút thắt cổ chai (The Problem - Bottleneck)**
+ * **Tiếng Việt:** Truyền tải dữ liệu hình ảnh khổng lồ từ thiết bị ngoại vi (Edge) lên đám mây (Cloud) gây tốn băng thông và cạn kiệt pin.
+ * **English:** Transmitting massive image data from Edge devices to the Cloud consumes high bandwidth and drains battery life.
+### **Slide 4: Chuẩn nén JPEG truyền thống (Standard JPEG Compression)**
+ * **Tiếng Việt:** JPEG dựa trên Hệ thống Thị giác Con người (HVS), tập trung giữ lại màu sắc và loại bỏ các chi tiết tần số cao mà mắt người khó thấy.
+ * **English:** Standard JPEG is based on the Human Visual System (HVS), preserving colors and discarding high-frequency details invisible to humans.
+### **Slide 5: Sự khác biệt về thị giác (Vision Divergence)**
+ * **Tiếng Việt:** Mắt người nhạy cảm với tần số thấp. Ngược lại, Mạng nơ-ron (DNN) cực kỳ nhạy cảm với các chi tiết tần số cao (viền, góc cạnh) để nhận diện vật thể.
+ * **English:** Human eyes are sensitive to low frequencies. Conversely, DNNs are highly sensitive to high-frequency details (edges, textures) for object recognition.
+### **Slide 6: Hạn chế của JPEG đối với AI (JPEG Limitations for AI)**
+ * **Tiếng Việt:** Khi nén mạnh bằng JPEG thông thường, các đặc trưng quan trọng của AI bị xóa bỏ, dẫn đến độ chính xác nhận diện giảm mạnh.
+ * **English:** Heavy compression using standard JPEG discards critical AI features, leading to a sharp drop in inference accuracy.
+### **Slide 7: Giải pháp DeepN-JPEG (The DeepN-JPEG Solution)**
+ * **Tiếng Việt:** Một khung nén mới tối ưu cho "máy xem". Vẫn giữ định dạng file .jpg nhưng thay đổi cách thức xử lý dữ liệu bên trong.
+ * **English:** A new compression framework optimized for "machine vision." It maintains .jpg compatibility while changing internal data processing.
+### **Slide 8: Cải tiến Bảng Lượng tử hóa (Q-Table Innovation)**
+ * **Tiếng Việt:** DeepN-JPEG thay thế bảng lượng tử hóa mặc định bằng một bảng Q-Table tùy chỉnh, được thiết kế riêng cho từng mô hình AI.
+ * **English:** DeepN-JPEG replaces the default quantization table with a customized Q-Table, specifically designed for each AI model.
+### **Slide 9: Quy trình 1: Phân tích độ nhạy (Workflow 1: Sensitivity Analysis)**
+ * **Tiếng Việt:** Xác định tần số nào quan trọng với AI. Tần số nào ảnh hưởng lớn đến kết quả nhận diện sẽ được giữ lại, tần số thừa sẽ bị nén mạnh.
+ * **English:** Identifying critical frequencies for AI. Frequencies impacting inference results are preserved, while redundant ones are heavily compressed.
+### **Slide 10: Quy trình 2: Tối ưu hóa (Workflow 2: Optimization)**
+ * **Tiếng Việt:** Giải bài toán: Tối đa hóa tỷ lệ nén trong khi vẫn đảm bảo độ chính xác của AI không giảm quá ngưỡng cho phép.
+ * **English:** Optimization Goal: Maximize compression ratio while ensuring AI accuracy remains above a minimum threshold.
+### **Slide 11: Các công thức kỹ thuật (Technical Formulas)**
+ * **Tiếng Việt:** Sử dụng DCT để chuyển sang miền tần số và tính toán độ nhạy S_{u,v} dựa trên đạo hàm của hàm Loss.
+ * **English:** Using DCT for frequency domain conversion and calculating sensitivity S_{u,v} based on the gradient of the Loss function.
+ * **Math:** 
+### **Slide 12: Quy trình nén DeepN-JPEG (DeepN-JPEG Pipeline)**
+ * **Tiếng Việt:** 1. Ngoại tuyến (Offline): Phân tích DNN để tạo Q-Table.
+   2. Trực tuyến (Online): Nén ảnh tại thiết bị bằng Q-Table mới và gửi lên Cloud.
+ * **English:** 1. Offline: Analyze DNN to generate the Q-Table.
+   2. Online: Compress image at the edge using the new Q-Table and send to Cloud.
+### **Slide 13: Kết quả thực nghiệm (Experimental Results)**
+ * **Tiếng Việt:** Tỷ lệ nén cao hơn gấp **3.5 lần** so với JPEG truyền thống trên các mô hình ResNet, VGG mà không làm giảm độ chính xác.
+ * **English:** **3.5x higher** compression ratio compared to standard JPEG across ResNet and VGG models with zero accuracy loss.
+### **Slide 14: Hiệu quả hệ thống (System Efficiency)**
+ * **Tiếng Việt:** Giảm đáng kể độ trễ truyền dữ liệu và tiết kiệm năng lượng cho các thiết bị IoT/Edge.
+ * **English:** Significantly reduces data transmission latency and saves power for IoT/Edge devices.
+### **Slide 15: Kết luận & Q&A (Conclusion & Q&A)**
+ * **Tiếng Việt:** DeepN-JPEG mở ra hướng đi mới: Nén dữ liệu hướng tới máy móc (Machine-centric).
+ * **English:** DeepN-JPEG pioneers a new direction: Machine-centric data compression.
+ * **Q&A:** Thank you for listening! / Cảm ơn các bạn đã lắng nghe!
+### **Lời khuyên cho PowerPoint:**
+ * **Hình ảnh:** Ở Slide 5 và 13, hãy tìm hình minh họa về các khối DCT hoặc biểu đồ so sánh Accuracy.
+ * **Trình bày:** Để Tiếng Anh làm tiêu đề chính (lớn hơn) và Tiếng Việt làm chú thích bên dưới (nhỏ hơn) nếu bạn muốn bài thuyết trình trông chuyên nghiệp theo chuẩn quốc tế.
+
+
