@@ -1,0 +1,588 @@
+Với constraint mới:
+
+input = motion photo JPEG / HEIC
+
+bắt buộc chạy trên device/emulator
+
+verify MotionScrap optimization + correctness
+
+
+thì architecture gần như chốt.
+
+Mình refine thành implementation plan sát thực tế hơn.
+
+Final architecture
+
+Python Test Harness (host)
+        |
+       adb
+        |
+Android Runner App (device/emulator)
+        |
+      AAR API
+        |
+   output mp4
+
+Host dùng để:
+
+discover testcase
+
+push sample
+
+trigger merge
+
+collect logcat
+
+pull output
+
+validate output bằng ffmpeg
+
+
+Device dùng để:
+
+load motion photo JPEG/HEIC
+
+gọi AAR thật
+
+run đúng Android media stack
+
+
+
+---
+
+Step-by-step implementation
+
+Phase 1 — Build Android runner app
+
+Step 1. Create project
+
+Android app riêng:
+
+motion-regression-runner/
+
+SDK theo đúng AAR requirement.
+
+Add:
+
+implementation(files("libs/your_motion_merge.aar"))
+
+Nếu cần:
+
+implementation "androidx.exifinterface:exifinterface:..."
+
+vì input JPEG/HEIC motionphoto.
+
+
+---
+
+Step 2. Define runner contract
+
+Python cần trigger merge.
+
+Create contract:
+
+Input:
+
+{
+  "caseName": "avc_hevc",
+  "inputDir": "/sdcard/motiontest/input",
+  "outputFile": "/sdcard/motiontest/output/output.mp4",
+  "mode": "motionscrap"
+}
+
+
+---
+
+Step 3. Expose execution entry
+
+Best:
+
+BroadcastReceiver.
+
+Example:
+
+class MergeReceiver : BroadcastReceiver()
+
+trigger:
+
+adb shell am broadcast ...
+
+Why:
+
+simple
+
+no instrumentation complexity
+
+easy from Python
+
+
+
+---
+
+Step 4. Implement merge runner
+
+Pseudo:
+
+fun runMerge(inputDir, outputFile, mode) {
+    val files = File(inputDir).listFiles()
+
+    motionMergeApi.merge(
+        inputs = files,
+        output = outputFile,
+        mode = mode
+    )
+}
+
+Need handle:
+
+JPEG motion photo
+
+HEIC motion photo
+
+
+Likely AAR already does parsing.
+
+
+---
+
+Phase 2 — Logging support
+
+Critical.
+
+Without logs MotionScrap validation is blind.
+
+Add structured logs.
+
+Example:
+
+Log.i("MotionMerge", "merge_start case=avc_hevc")
+
+Per input:
+
+Log.i(
+    "MotionScrap",
+    "input=file1.heic codec=HEVC action=TRANSCODE"
+)
+
+or:
+
+Log.i(
+    "MotionScrap",
+    "input=file2.jpg codec=AVC action=PASSTHROUGH"
+)
+
+Finish:
+
+Log.i("MotionMerge", "merge_end duration=4231")
+
+Failure:
+
+Log.e("MotionMerge", "merge_failed reason=...")
+
+
+---
+
+Phase 3 — Test data organization
+
+Recommended:
+
+testcases/
+    fullavc/
+        config.yaml
+        input/
+            1.jpg
+            2.jpg
+            3.jpg
+
+    avc_hevc/
+        config.yaml
+        input/
+            1.jpg
+            2.heic
+            3.jpg
+
+
+---
+
+Config:
+
+name: avc_hevc
+
+expect:
+  success: true
+  audio: true
+
+motionscrap:
+  expected_transcodes:
+    - 2.heic
+
+
+---
+
+Phase 4 — Python orchestration
+
+Project:
+
+motion-regression/
+    runner/
+
+Structure:
+
+runner/
+    main.py
+    adb.py
+    testcase.py
+    validators/
+
+
+---
+
+Step 1. Device check
+
+Verify:
+
+adb devices
+
+Python:
+
+ensure_device_connected()
+
+Optional:
+
+choose emulator/device by serial.
+
+
+---
+
+Step 2. Push testcase
+
+For each testcase:
+
+clean:
+
+adb shell rm -rf /sdcard/motiontest
+
+create:
+
+adb shell mkdir -p /sdcard/motiontest/input
+
+push:
+
+adb push testcases/avc_hevc/input /sdcard/motiontest/
+
+
+---
+
+Step 3. Clear logcat
+
+Before run:
+
+adb logcat -c
+
+Mandatory.
+
+Otherwise logs mix.
+
+
+---
+
+Step 4. Trigger runner
+
+Example:
+
+adb shell am broadcast \
+-a com.company.RUN_MERGE \
+--es case avc_hevc \
+--es input /sdcard/motiontest/input \
+--es output /sdcard/motiontest/output/out.mp4 \
+--es mode motionscrap
+
+
+---
+
+Step 5. Wait for completion
+
+Need completion signal.
+
+Best options:
+
+Option A: poll output file
+
+adb shell ls /sdcard/motiontest/output/out.mp4
+
+simple but weak.
+
+
+---
+
+Option B (recommended): completion marker
+
+Android writes:
+
+/sdcard/motiontest/status.json
+
+Example:
+
+{
+  "success": true,
+  "durationMs": 4211
+}
+
+Python polls.
+
+Best design.
+
+
+---
+
+Phase 5 — Artifact collection
+
+Per testcase:
+
+pull:
+
+adb pull /sdcard/motiontest/output/out.mp4
+
+status:
+
+adb pull /sdcard/motiontest/status.json
+
+logs:
+
+adb logcat -d > reports/avc_hevc/logcat.txt
+
+Artifacts:
+
+reports/
+    avc_hevc/
+        output.mp4
+        status.json
+        logcat.txt
+
+
+---
+
+Phase 6 — Validation
+
+1. File exists
+
+Simple.
+
+
+---
+
+2. Decode validation
+
+Critical.
+
+Run host-side:
+
+ffmpeg -v error -i output.mp4 -f null -
+
+Fail if:
+
+corrupt decoded frame
+Invalid NAL
+decode error
+
+
+---
+
+3. ffprobe validation
+
+Check:
+
+ffprobe -show_streams -of json
+
+Validate:
+
+video stream exists
+
+audio exists if expected
+
+duration > 0
+
+
+
+---
+
+4. MotionScrap validation
+
+Parse:
+
+MotionScrap
+
+Expected:
+
+2.heic -> TRANSCODE
+
+Actual from logcat.
+
+Compare.
+
+
+---
+
+Phase 7 — Benchmark mode
+
+Since feature = optimization.
+
+Modes:
+
+legacy
+motionscrap
+
+Run same testcase twice.
+
+Measure:
+
+total time
+
+delta
+
+
+Output:
+
+CASE        LEGACY   SCRAP
+fullavc     14.1s    2.3s
+avc_hevc    15.0s    6.1s
+
+Huge value.
+
+
+---
+
+Emulator vs real device
+
+You said:
+
+> device/emulator
+
+
+
+Need note.
+
+Emulator pros
+
+Good for automation.
+
+But HEIC decode support can vary.
+
+Media performance unrealistic.
+
+
+---
+
+Real device pros
+
+True production behavior.
+
+Better codec validation.
+
+
+---
+
+Recommendation:
+
+Development:
+
+emulator
+
+Performance benchmark:
+
+real device
+
+
+---
+
+MVP implementation order
+
+Do exactly this:
+
+Day 1
+
+Android runner app
+
+BroadcastReceiver
+
+call AAR
+
+write status.json
+
+
+
+---
+
+Day 2
+
+Python runner
+
+discover testcase
+
+adb push
+
+trigger
+
+collect logcat/output
+
+
+
+---
+
+Day 3
+
+validators
+
+ffmpeg decode
+
+ffprobe
+
+report
+
+
+
+---
+
+Day 4
+
+MotionScrap log parsing
+
+
+---
+
+Day 5
+
+benchmark compare mode
+
+
+---
+
+Tech stack
+
+Recommended:
+
+Android:
+
+Kotlin
+
+
+Host:
+
+Python 3
+
+
+Dependencies:
+
+adb
+
+ffmpeg
+
+ffprobe
+
+PyYAML
+
+
+
+---
+
+This is the implementation path with lowest risk for your exact scenario.
