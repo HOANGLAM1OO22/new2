@@ -1,0 +1,236 @@
+Với mục tiêu của bạn, doc này nên là setup/enablement guide, không chỉ là “how to install”. Vì người đọc có thể là dev mới hoặc người cần reproduce môi trường nhanh.
+
+Mình khuyên KHÔNG gộp 86x64 và arm64 thành 1 flow dài, mà làm 1 guide chung + 2 path riêng. Lý do:
+
+x86_64 là legacy flow (local Ubuntu dev)
+
+arm64 là current required flow (Gallery Cloud migration)
+
+nếu trộn chung sẽ rất khó follow và dễ nhầm binary/image/server
+
+
+Cấu trúc 1 trang (hoặc ~1.5 trang) hợp lý:
+
+VTEngine Environment Setup Guide
+
+1. Overview
+
+Ngắn gọn 3–4 dòng:
+
+Purpose This guide describes how to set up the VTEngine development/testing environment for Gallery Cloud integration.
+
+Background Originally, VTEngine development/testing was based on Ubuntu x86_64 environments for Gallery Cloud support. Since Gallery Cloud infrastructure has migrated to ARM64, an ARM64-compatible setup is now required for validation, debugging, and testing.
+
+
+---
+
+2. Supported Environments
+
+Table ngắn:
+
+Environment	Use Case	Status
+
+Ubuntu x86_64	Legacy local development	Optional
+ARM64 dev server	Gallery Cloud validation/testing	Recommended
+
+
+=> Nếu x86_64 không còn dùng thực tế thì bỏ luôn, chỉ note:
+
+> x86_64 setup is retained only for backward compatibility.
+
+
+
+
+---
+
+3. Prerequisites
+
+Chia theo common:
+
+Common
+
+Ubuntu 22.04 / 24.04
+
+AWS CLI
+
+kubectl
+
+network access / VPN
+
+permission to access Gallery Cloud dev environment
+
+
+ARM64 only
+
+ARM64 dev server access
+
+packaged connection bundle (attached files)
+
+AWS temporary credentials / profile
+
+
+
+---
+
+4. ARM64 Environment Setup (Main Flow)
+
+Đây là phần quan trọng nhất.
+
+Step 1 — Install AWS CLI
+
+sudo apt install awscli
+aws configure
+
+Hoặc nếu dùng STS:
+
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_SESSION_TOKEN=...
+
+
+---
+
+Step 2 — Install kubectl
+
+curl -LO ...
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/
+
+
+---
+
+Step 3 — Prepare connection bundle
+
+Giải thích file đính kèm gồm gì:
+
+kubeconfig
+
+helper scripts
+
+ARM64 binaries / fix files
+
+certificates (nếu có)
+
+
+Ví dụ:
+
+tar -xvf arm64_bundle.tar.gz
+cd arm64_bundle
+
+
+---
+
+Step 4 — Connect to Gallery Cloud ARM64 dev environment
+
+Ví dụ:
+
+export KUBECONFIG=./kubeconfig
+kubectl get nodes
+
+Expected:
+
+NAME   STATUS   ARCH
+xxx    Ready    arm64
+
+
+---
+
+Step 5 — Pull/use provided ARM64 test image
+
+Ví dụ:
+
+docker load < vtengine_arm64.tar
+
+hoặc:
+
+docker pull xxx
+
+Run:
+
+docker run ...
+
+
+---
+
+5. Optional: x86_64 Local Setup
+
+Nếu vẫn cần:
+
+native ubuntu setup
+
+dependency install
+
+build/test locally
+
+
+Nếu không thực sự cần thì chỉ note:
+
+> Legacy x86_64 setup is not covered in this guide.
+
+
+
+
+---
+
+6. Troubleshooting
+
+Rất nên có vì bạn đã gặp lỗi thực tế:
+
+TLS handshake timeout Cause:
+
+expired AWS session
+
+wrong kubeconfig
+
+network/VPN issue
+
+
+Check:
+
+aws sts get-caller-identity
+kubectl config current-context
+kubectl get nodes
+
+
+---
+
+Architecture mismatch
+
+Exec format error
+
+Cause:
+
+x86 binary on ARM64
+
+
+Check:
+
+uname -m
+file binary_name
+
+
+---
+
+Recommendation
+
+Theo context của bạn, mình recommend:
+
+Guide chính chỉ focus ARM64 vì đó là môi trường Gallery Cloud hiện tại.
+
+x86_64 chỉ mention ngắn trong background hoặc appendix.
+
+Không nên maintain 2 full setup nếu team không còn dùng x86_64 thật.
+
+
+---
+
+Tên doc có thể là:
+
+VTEngine ARM64 Environment Setup Guide
+
+Gallery Cloud ARM64 Development Setup for VTEngine
+
+VTEngine Development Environment Setup (ARM64)
+
+
+Tên thứ 2 nghe corporate/doc style nhất.
