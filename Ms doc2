@@ -1,0 +1,375 @@
+Để review với architect/mentor, doc nên kể câu chuyện theo luồng:
+
+Current limitation → Why MotionScrap → Design → Benefits → Compatibility
+
+Không nên đi quá sâu vào implementation ngay từ đầu.
+
+MotionScrap Integration for Motion Photo Video Merge
+
+1. Introduction
+
+Gallery currently provides a feature that creates a single video from multiple Motion Photos.
+
+The existing implementation is built on top of the Story pipeline and uses MotionPhotoUtil APIs to extract video clips and estimate valid video ranges through "getOverlappingSection()".
+
+While the current solution guarantees compatibility across different devices and video formats, all clips are transcoded before being merged. This results in unnecessary processing overhead for many Motion Photo scenarios.
+
+This document proposes integrating MotionScrap as an optimized merge engine that minimizes transcoding while preserving compatibility with the existing workflow.
+
+---
+
+2. Current Workflow
+
+Current processing flow:
+
+Motion Photos
+      │
+      ▼
+MotionPhotoUtil
+      │
+      ▼
+getOverlappingSection()
+      │
+      ▼
+Trim Video Clips
+      │
+      ▼
+Story Pipeline
+      │
+      ▼
+Decode → Encode
+      │
+      ▼
+Merge
+      │
+      ▼
+Output Video
+
+Advantages
+
+- Mature implementation
+- Handles various video formats
+- Consistent output behavior
+
+Limitations
+
+All clips are always transcoded regardless of format compatibility.
+
+This leads to:
+
+- Increased processing time
+- High CPU utilization
+- Additional battery consumption
+- Potential quality degradation caused by re-encoding
+
+---
+
+3. Motivation
+
+Motion Photos are typically captured within a short period of time and often share similar video characteristics:
+
+- Same codec
+- Same resolution
+- Same frame rate
+- Same color format
+
+For these clips, transcoding is not required.
+
+However, Motion Photos may also differ depending on:
+
+- Device model
+- Camera configuration
+- HDR mode
+- Software version
+- Recording settings
+
+As a result, a direct merge approach cannot be applied universally.
+
+The objective is therefore:
+
+«Transcode only when necessary.»
+
+Instead of forcing all clips through the same transcoding pipeline, MotionScrap identifies compatible clips and processes them through the most efficient path.
+
+---
+
+4. Proposed Solution
+
+MotionScrap introduces a hybrid processing model.
+
+Before merging, MotionScrap analyzes all input clips and determines how each segment should be processed.
+
+High-Level Flow
+
+Motion Photos
+      │
+      ▼
+Metadata Analysis
+      │
+      ▼
+Format Classification
+      │
+      ▼
+ ┌────────────┬─────────────┬────────────┐
+ │ Transfer   │ Transition  │ Transcode  │
+ └────────────┴─────────────┴────────────┘
+                     │
+                     ▼
+                   Muxer
+                     │
+                     ▼
+                Output Video
+
+---
+
+5. Format Analysis
+
+MotionScrap inspects the following properties for each clip:
+
+- Video codec
+- Resolution
+- Frame rate
+- Color format
+- HDR metadata
+- Rotation metadata
+
+The analysis is used to determine a target format and identify compatible clip groups.
+
+Example:
+
+Clip| Format
+A| H264 1080p 30fps
+B| H264 1080p 30fps
+C| H264 1080p 30fps
+D| HEVC 1080p 30fps
+
+Target format:
+
+H264 1080p 30fps
+
+In this case, clips A, B and C can be transferred directly while only clip D requires transcoding.
+
+---
+
+6. Processing Paths
+
+6.1 Transfer
+
+Used when a clip already matches the target format.
+
+Processing:
+
+- Read samples
+- Adjust timestamps
+- Write directly to output
+
+Characteristics:
+
+- No decoding
+- No encoding
+- No quality loss
+
+---
+
+6.2 Transition
+
+Used for transition effects between adjacent clips.
+
+Examples:
+
+- Cross fade
+- Dissolve
+- Fade in / fade out
+
+Processing:
+
+- Decode required frames
+- Generate transition frames
+- Encode transition segment
+
+Only the transition region requires rendering and encoding.
+
+---
+
+6.3 Transcode
+
+Used when a clip differs from the target format.
+
+Examples:
+
+- Different codec
+- Different resolution
+- Different frame rate
+- HDR mismatch
+
+Processing:
+
+- Decode
+- Convert format
+- Encode to target format
+
+The converted segment is then merged with transfer and transition outputs.
+
+---
+
+7. Thread Architecture
+
+MotionScrap uses dedicated worker threads to process different workloads independently.
+
+Transfer Thread
+
+Responsibilities:
+
+- Sample reading
+- Timestamp adjustment
+- Sample transfer
+
+Characteristics:
+
+- Lightweight
+- I/O intensive
+
+---
+
+Transition Thread
+
+Responsibilities:
+
+- Transition rendering
+- Frame composition
+- Effect generation
+
+Characteristics:
+
+- Compute intensive
+- Independent from transfer processing
+
+---
+
+Transcode Thread
+
+Responsibilities:
+
+- Decode
+- Format conversion
+- Encode
+
+Characteristics:
+
+- Most expensive processing stage
+- Triggered only when required
+
+---
+
+8. Integration with Existing Components
+
+MotionScrap reuses existing MotionPhotoUtil functionality.
+
+MotionPhotoUtil
+
+Used for:
+
+- Motion Photo parsing
+- Metadata extraction
+- Video clip extraction
+
+getOverlappingSection()
+
+Used for:
+
+- Estimating valid video ranges
+- Determining overlapping sections between clips
+
+No changes are required to existing APIs.
+
+---
+
+9. Expected Benefits
+
+Reduced Processing Time
+
+Current implementation:
+
+All Clips
+      │
+      ▼
+Transcode
+      │
+      ▼
+Merge
+
+Proposed implementation:
+
+Compatible Clips
+      │
+      ▼
+Transfer
+
+Incompatible Clips
+      │
+      ▼
+Transcode
+
+Transition Areas
+      │
+      ▼
+Transition Rendering
+
+Only necessary segments are transcoded.
+
+---
+
+Better Video Quality
+
+Compatible clips are transferred directly without re-encoding.
+
+Benefits:
+
+- Original bitstream preserved
+- No generation loss
+
+---
+
+Lower Resource Consumption
+
+Reduced:
+
+- CPU usage
+- Memory usage
+- Battery consumption
+
+Especially beneficial when processing a large number of Motion Photos.
+
+---
+
+10. Compatibility and Fallback
+
+To minimize integration risk, the existing Story pipeline remains available as a fallback mechanism.
+
+Fallback scenarios include:
+
+- Unsupported formats
+- Format analysis failure
+- MotionScrap processing failure
+
+Workflow:
+
+MotionScrap
+      │
+      ▼
+Validation
+      │
+ ┌────┴────┐
+ │ Pass    │ Fail
+ ▼         ▼
+Merge   Story Pipeline
+
+This guarantees backward compatibility while allowing MotionScrap to optimize supported scenarios.
+
+---
+
+11. Conclusion
+
+MotionScrap introduces a hybrid merge architecture that combines direct transfer, transition rendering and selective transcoding.
+
+By replacing the current "always transcode" strategy with a "transcode only when necessary" approach, MotionScrap can significantly reduce processing cost while maintaining compatibility with existing Motion Photo workflows.Tôi khuyên thêm 1 section cuối cùng là Benchmark Result (sau khi có PoC), vì đó thường là phần đầu tiên mà reviewer sẽ nhìn để quyết định proposal này có đáng đầu tư hay không.
