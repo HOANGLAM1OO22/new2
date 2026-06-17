@@ -1,0 +1,462 @@
+Đoạn code bạn paste bị OCR lỗi khá nhiều (mất dấu {}, ;, xuống dòng sai, tên biến bị dính nhau). Tuy nhiên mình có thể reconstruct lại logic và format lại cho dễ đọc.
+
+
+---
+
+1. getOverlappingSection()
+
+Logic:
+
+Duyệt danh sách Motion Photo đã sort theo thời gian.
+
+Lấy duration thực từ video/audio track.
+
+Tính currentFileEndTimeMs.
+
+So với file trước đó.
+
+Nếu overlap → chỉ lấy phần không overlap.
+
+Nếu bị overlap hoàn toàn → bỏ qua.
+
+
+public static LinkedHashSet<SectionInfo> getOverlappingSection(
+        @NonNull LinkedHashSet<ItemInfo> itemList) {
+
+    Log.d(TAG, "getOverlappingSection");
+
+    long start = System.nanoTime();
+
+    LinkedHashSet<SectionInfo> result = new LinkedHashSet<>();
+
+    long prevFileEndTimeMs = 0;
+    long prevFileDuration = 0;
+
+    int processedImages = 0;
+
+    ItemInfo prevItemInfo = null;
+
+    for (ItemInfo currentItemInfo : itemList) {
+
+        long currentFileDuration;
+        long currentFileEndTimeMs;
+
+        /*
+         * Get real duration from video/audio track
+         */
+        VideoInfo info = getVideoDataPosition(currentItemInfo.file);
+
+        if (info != null && info.getVideoLength() > 0) {
+
+            Map<String, Long> fileInfo = getTrackDuration(
+                    info.getVideoOffset(),
+                    info.getVideoLength(),
+                    currentItemInfo.file
+            );
+
+            Long videoDuration = fileInfo.get("mp-video-duration");
+            Long audioDuration = fileInfo.get("mp-audio-duration");
+
+            if (videoDuration != null && audioDuration != null) {
+
+                /*
+                 * Audio/video duration may differ slightly.
+                 * Use the shorter one.
+                 */
+                currentFileDuration =
+                        Math.min(videoDuration, audioDuration) / 1000;
+
+            } else {
+                currentFileDuration = currentItemInfo.duration;
+            }
+
+        } else {
+            currentFileDuration = currentItemInfo.duration;
+        }
+
+        long exifDateTimeOriginal =
+                currentItemInfo.exifDateTimeOriginalMs;
+
+        long presentationTimestampMs =
+                getEDMPTimestamp(currentItemInfo.file) / 1000;
+
+        if (presentationTimestampMs > currentFileDuration) {
+            presentationTimestampMs = currentFileDuration;
+        }
+
+        if (presentationTimestampMs + 200 < currentFileDuration) {
+
+            currentFileEndTimeMs =
+                    exifDateTimeOriginal
+                            + (currentFileDuration
+                            - presentationTimestampMs);
+
+        } else {
+
+            currentFileEndTimeMs = exifDateTimeOriginal;
+        }
+
+        Log.d(TAG,
+                "[file=" + currentItemInfo.file +
+                        ", endTime=" + currentFileEndTimeMs +
+                        ", duration=" + currentFileDuration + "]");
+
+        /*
+         * First item
+         */
+        if (prevItemInfo == null) {
+
+            result.add(new SectionInfo(
+                    currentItemInfo.file,
+                    0,
+                    currentFileDuration));
+
+            Log.d(TAG,
+                    "startPos=0, endPos=" + currentFileDuration);
+
+            processedImages++;
+
+            prevFileDuration = currentFileDuration;
+            prevFileEndTimeMs = currentFileEndTimeMs;
+            prevItemInfo = currentItemInfo;
+
+            continue;
+        }
+
+        long diff = currentFileEndTimeMs - prevFileEndTimeMs;
+
+        if (diff > 0) {
+
+            long currentFileStartTimeMs =
+                    currentFileEndTimeMs - currentFileDuration;
+
+            if (currentFileStartTimeMs < prevFileEndTimeMs) {
+
+                long notOverlapped =
+                        currentFileEndTimeMs - prevFileEndTimeMs;
+
+                long startPos =
+                        currentFileDuration - notOverlapped;
+
+                result.add(new SectionInfo(
+                        currentItemInfo.file,
+                        startPos,
+                        currentFileDuration));
+
+                Log.d(TAG,
+                        "startPos=" + startPos +
+                                ", endPos=" + currentFileDuration);
+
+            } else {
+
+                result.add(new SectionInfo(
+                        currentItemInfo.file,
+                        0,
+                        currentFileDuration));
+
+                Log.d(TAG,
+                        "startPos=0, endPos=" + currentFileDuration);
+            }
+
+            processedImages++;
+
+            prevFileDuration = currentFileDuration;
+            prevFileEndTimeMs = currentFileEndTimeMs;
+            prevItemInfo = currentItemInfo;
+
+        } else {
+
+            Log.d(TAG,
+                    "Current motion photo overlapped completely. Skip.");
+        }
+    }
+
+    long end = System.nanoTime();
+
+    Log.d(TAG,
+            "executing time="
+                    + (end - start) / 1_000_000
+                    + " ms, total image="
+                    + processedImages);
+
+    return result;
+}
+
+
+---
+
+2. prepareMotionPhotoInfo()
+
+Logic:
+
+1. Sort ảnh theo DateTaken.
+
+
+2. Load duration.
+
+
+3. Tính section overlap.
+
+
+4. Tạo KenBurnMap mới.
+
+
+5. Tính total duration.
+
+
+
+private void prepareMotionPhotoInfo(
+        EncodeInfo encodeInfo,
+        Consumer<Boolean> prepared,
+        AtomicBoolean interrupt) {
+
+    showDialog();
+
+    SimpleThreadPool.getInstance().submit(() -> {
+
+        TimeTickLog tickLog =
+                new TimeTickLog(TAG, "prepareMotionPhotoInfo");
+
+        List<ThumbnailInterface> list =
+                encodeInfo.kenBurnsMap.keySet()
+                        .stream()
+                        .sorted(Comparator.comparingLong(
+                                ThumbnailInterface::getDateTaken))
+                        .collect(Collectors.toList());
+
+        List<MotionPhotoUtils.SectionInfo> infos =
+                new ArrayList<>();
+
+        for (ThumbnailInterface item : list) {
+
+            if (interrupt.get()) {
+                prepared.accept(false);
+                return;
+            }
+
+            MotionPhotoUtils.SectionInfo info =
+                    new MotionPhotoUtils.SectionInfo();
+
+            info.filePath = item.getPath();
+            info.dateTaken = item.getDateTaken();
+            info.duration =
+                    MetadataManager.getInstance()
+                            .load(item)
+                            .duration;
+
+            infos.add(info);
+        }
+
+        tickLog.tick("loadVideoInfo");
+
+        List<MotionPhotoUtils.SectionInfo> sections =
+                MotionPhotoUtils.getOverlappingSection(infos);
+
+        tickLog.tick("loadSections");
+
+        LinkedHashMap<ThumbnailInterface, KenBurnsInfo> newKenBurnMap =
+                new LinkedHashMap<>();
+
+        HashMap<ThumbnailInterface, Pair<Long, Long>> sectionInfoMap =
+                new HashMap<>();
+
+        int totalDuration = 0;
+
+        for (MotionPhotoUtils.SectionInfo section : sections) {
+
+            int duration =
+                    (int) (section.endPosition
+                            - section.startPosition);
+
+            totalDuration += duration;
+
+            ThumbnailInterface item =
+                    list.stream()
+                            .filter(i ->
+                                    i.getPath().equals(section.filePath))
+                            .findAny()
+                            .orElse(null);
+
+            if (item == null) {
+                continue;
+            }
+
+            KenBurnsInfo info =
+                    encodeInfo.kenBurnsMap.get(item);
+
+            if (info != null) {
+
+                info.getTransitionInProperty()
+                        .setDelay(
+                                duration > 1500
+                                        ? (float) (duration - 750)
+                                        / duration
+                                        : 1f
+                        );
+
+                info.setInitAlpha(0f)
+                        .setTargetAlpha(1f);
+
+                newKenBurnMap.put(item, info);
+
+                sectionInfoMap.put(
+                        item,
+                        new Pair<>(
+                                section.startPosition,
+                                section.endPosition
+                        ));
+            }
+        }
+
+        encodeInfo
+                .setDuration(totalDuration)
+                .setKenBurnMap(newKenBurnMap)
+                .setSectionInfoMap(sectionInfoMap);
+
+        tickLog.tock();
+
+        boolean success = totalDuration > 0;
+
+        ThreadUtil.runOnUiThread(
+                () -> prepared.accept(success));
+
+        Log.d(TAG,
+                "prepareMotionPhotoInfo result: duration="
+                        + totalDuration
+                        + ", sectionSize="
+                        + sections.size()
+                        + ", originSize="
+                        + list.size());
+    });
+}
+
+
+---
+
+3. writeTrack()
+
+Logic:
+
+Lấy từng MediaCodecChannel.
+
+Bỏ track không cần mux.
+
+Ghi sample vào muxer.
+
+Cập nhật first/last timestamp.
+
+
+fun writeTrack(
+    numChannel: Int,
+    source: MPFile,
+    channels: BlockingQueue<MediaCodecChannel>
+): Result {
+
+    SLog.i(
+        TAG,
+        "writeTrack: numChannel=$numChannel, source=${source.path()}, channels=${channels.size}"
+    )
+
+    var firstTimestampUs = Long.MAX_VALUE
+    var lastTimestampUs = 0L
+
+    val firstTransferTimestampUs = 0L
+
+    val lastTransferTimestampUs =
+        if (lastTransferTimestampUs == 0L) {
+            source.getDistinctLastTimestampUs()
+        } else {
+            lastTransferTimestampUs
+        }
+
+    repeat(numChannel) {
+
+        val channel = channels.take()
+
+        SLog.i(TAG, "getChannel: ${channel.mimeType}")
+
+        if (targetMimeTypes.any {
+                channel.mimeType.value.startsWith(it)
+            }) {
+
+            SLog.w(
+                TAG,
+                "target mime type ${channel.mimeType}, skip"
+            )
+
+            return@repeat
+        }
+
+        val mimeType = channel.mimeType.value
+        val (muxTrackIndex, _) = trackInfos[mimeType]!!
+
+        while (true) {
+
+            val buffer = channel.take()
+
+            val bufferInfo = buffer.info
+            val byteBuffer = buffer.data
+
+            when {
+
+                bufferInfo.flags and
+                        MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0 -> {
+
+                    SLog.d(TAG, "EOS reached")
+                    break
+                }
+
+                bufferInfo.presentationTimeUs <
+                        firstTransferTimestampUs -> {
+
+                    SLog.d(
+                        TAG,
+                        """
+                        Skip frame
+                        track=$muxTrackIndex
+                        ${bufferInfo.asString()}
+                        lastTransferTimestampUs=$lastTransferTimestampUs
+                        """.trimIndent()
+                    )
+
+                    continue
+                }
+            }
+
+            muxer.writeSampleData(
+                muxTrackIndex,
+                byteBuffer,
+                bufferInfo
+            )
+
+            byteBuffer.rewind()
+
+            firstTimestampUs =
+                minOf(firstTimestampUs,
+                    bufferInfo.presentationTimeUs)
+
+            lastTimestampUs =
+                maxOf(lastTimestampUs,
+                    bufferInfo.presentationTimeUs)
+
+            eventListener?.onEachFrameTransferred(
+                source,
+                mimeType,
+                bufferInfo
+            )
+        }
+    }
+
+    return Result.success()
+}
+
+
+---
+
+Tuy nhiên mình thấy trong getOverlappingSection() có một điểm đáng nghi:
+
+currentFileEndTimeMs =
+    exifDateTimeOriginal +
+    (currentFileDuration - presentationTimestampMs);
+
+Nếu presentationTimestampMs là timestamp của frame đầu tiên trong MP4 thì công thức này có thể làm lệch end time khi Motion Photo chứa video được trim hoặc có offset audio/video. Đây rất có thể là nguyên nhân gây duplicate frame hoặc section overlap sai mà bạn đang test Motion Scrap gần đây.
