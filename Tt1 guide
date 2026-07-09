@@ -1,0 +1,286 @@
+Dưới đây là bản hoàn chỉnh tôi đề xuất để gửi nội bộ cho mentor review trước. Tôi đã tối ưu theo hướng: chuyên nghiệp nhưng không quá formal, request nhẹ nhàng, guide đủ để Gallery team tích hợp, giải thích rõ Future<Result> và tránh các chi tiết test-only.
+
+Hi [Mentor Name],
+
+I’ve prepared the draft email below to request the Gallery team’s support in testing MotionScrap with the “Merge video clips” feature.
+
+Could you please review it and let me know if anything should be updated or added before I send it to the Gallery team?
+
+---
+
+Hello Gallery team,
+
+We would like to ask for your support in testing MotionScrap for the “Merge video clips” feature in the Gallery environment.
+
+For testing, I’ve attached the latest "motionphotoutil.aar". Please refer to the guide below for basic integration and API usage.
+
+Usage Guide
+
+1. Add the library
+
+Add the attached "motionphotoutil.aar" to the Gallery project and include it as a dependency.
+
+2. Prepare input and output paths
+
+- "inputs": A list of input Motion Photo file paths.
+- "output": The destination path for the generated MP4 file.
+
+3. Create and run MotionScrap
+
+val inputs: List<String> = selectedFiles.map { it.absolutePath }
+
+val output: String = File(
+    outputDir,
+    "motionscrap_output.mp4"
+).absolutePath
+
+val motionScrap = MotionScrap.Builder()
+    .setOnProgressListener { progress ->
+        // Overall progress: 0.0f ~ 1.0f
+        Log.d(TAG, "Progress: $progress")
+    }
+    .setOnCompleteListener { success, event ->
+        when (event) {
+            ExportEvent.EXECUTE_COMPLETE -> {
+                Log.d(TAG, "Export completed: $output")
+            }
+
+            ExportEvent.EXECUTE_CANCEL -> {
+                Log.d(TAG, "Export canceled")
+            }
+
+            ExportEvent.EXECUTE_FAIL -> {
+                Log.e(TAG, "Export failed")
+            }
+
+            else -> {
+                Log.d(TAG, "success=$success, event=$event")
+            }
+        }
+    }
+    .build()
+
+val future: Future<Result> = motionScrap.export(inputs, output)
+
+4. Handle progress and completion
+
+- "setOnProgressListener": Reports the overall export progress as a "Float" value from "0.0f" to "1.0f".
+- "setOnCompleteListener": Reports the final export status through:
+  - "success": Indicates whether the export completed successfully.
+  - "event": Indicates the final export event.
+
+Main completion events:
+
+- "ExportEvent.EXECUTE_COMPLETE": Export completed successfully.
+- "ExportEvent.EXECUTE_CANCEL": Export was canceled.
+- "ExportEvent.EXECUTE_FAIL": Export failed.
+
+The "export()" API starts processing asynchronously and returns a "Future<Result>", which can be used to retrieve the result if needed.
+
+Since "Future.get()" blocks until the export completes, it should not be called on the main thread.
+
+Example:
+
+executor.execute {
+    try {
+        val result: Result = future.get()
+        Log.d(TAG, "Export result: $result")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to get export result", e)
+    }
+}
+
+5. Cancel and release resources
+
+// Cancel an ongoing export if needed
+motionScrap.cancel()
+
+// Release resources when no longer needed
+motionScrap.close()
+
+Gallery-side Integration Reference
+
+For the Gallery-side code changes needed to integrate MotionScrap, we have prepared the modifications in the WIP below. You can refer to it as an integration reference for the Gallery flow:
+
+[WIP link]
+
+We would appreciate it if you could test MotionScrap with the “Merge video clips” feature and share any feedback or issues you notice during testing.
+
+If you encounter any issues, please feel free to share relevant details such as reproduction steps, input files, generated output, or logs if available. We’ll be happy to check them from our side.
+
+Please let us know if you need any additional information or support.
+
+Thank you for your help.
+
+Best regards,Tôi khuyên dùng bản này làm draft gửi mentor. Điểm tôi chỉnh đáng chú ý là đổi câu WIP thành “integration reference for the Gallery flow”, nghe chuyên nghiệp và nhẹ hơn “applying the changes”, vì không tạo cảm giác yêu cầu Gallery team phải áp dụng implementation của team bạn.
+
+
+Đây là bản rút gọn, vẫn đủ input, output, progress, completion event, cancel/close và WIP:
+
+Hi [Mentor Name],
+
+I’ve prepared the draft email below for requesting the Gallery team to test MotionScrap with the “Merge video clips” feature.
+
+Could you please review it and let me know if anything should be updated or added before I send it to the Gallery team?
+
+---
+
+Hello Gallery team,
+
+We would like to ask for your support in testing MotionScrap for the “Merge video clips” feature in the Gallery environment.
+
+I’ve attached the latest "motionphotoutil.aar" for testing. You can refer to the sample code below for basic API usage:
+
+val inputs: List<String> = selectedFiles.map { it.absolutePath }
+val output: String = File(
+    outputDir,
+    "motionscrap_output.mp4"
+).absolutePath
+
+val motionScrap = MotionScrap.Builder()
+    .setOnProgressListener { progress ->
+        // Overall progress: 0.0f ~ 1.0f
+        Log.d(TAG, "Progress: $progress")
+    }
+    .setOnCompleteListener { success, event ->
+        when (event) {
+            ExportEvent.EXECUTE_COMPLETE ->
+                Log.d(TAG, "Export completed: $output")
+
+            ExportEvent.EXECUTE_CANCEL ->
+                Log.d(TAG, "Export canceled")
+
+            ExportEvent.EXECUTE_FAIL ->
+                Log.e(TAG, "Export failed")
+
+            else ->
+                Log.d(TAG, "success=$success, event=$event")
+        }
+    }
+    .build()
+
+val future: Future<Result> = motionScrap.export(inputs, output)
+
+// Cancel the ongoing export if needed
+// motionScrap.cancel()
+
+// Release resources when no longer needed
+// motionScrap.close()
+
+API parameters and callbacks:
+
+- "inputs": List of input Motion Photo file paths.
+- "output": Destination path for the generated MP4 file.
+- "setOnProgressListener": Reports overall progress from "0.0f" to "1.0f".
+- "setOnCompleteListener": Reports the final status through "success" and "event".
+- Main completion events: "EXECUTE_COMPLETE", "EXECUTE_CANCEL", and "EXECUTE_FAIL".
+- "export()": Starts processing and returns "Future<Result>".
+
+For the Gallery-side changes needed to integrate MotionScrap, we have prepared the modifications in the WIP below. You can refer to it as an example for the Gallery flow:
+
+[WIP link]
+
+We would appreciate it if you could test MotionScrap with the “Merge video clips” feature and share any feedback or issues you notice.
+
+If you run into any issues, please feel free to share the relevant details, such as reproduction steps, input files, generated output, or logs if available. We’ll be happy to check them from our side.
+
+Please let us know if you need any additional information or support.
+
+Thanks for your help!
+
+Best regards,Bản này phù hợp hơn cho mail nội bộ kỹ thuật: ít giải thích lặp lại nhưng vẫn đủ để Gallery team bắt đầu integration và testing.
+
+
+
+
+Đây là bản rút gọn hơn nhưng vẫn giữ đủ: mục đích test, AAR, input/output, progress, completion event, Future<Result>, cancel/close và WIP reference.
+
+Hi [Mentor Name],
+
+I’ve prepared the draft email below to request the Gallery team’s support in testing MotionScrap with the “Merge video clips” feature.
+
+Could you please review it and let me know if anything should be updated or added before I send it to the Gallery team?
+
+---
+
+Hello Gallery team,
+
+We would like to ask for your support in testing MotionScrap for the “Merge video clips” feature in the Gallery environment.
+
+For testing, I’ve attached the latest "motionphotoutil.aar". Please refer to the guide below for basic integration and API usage.
+
+Usage Guide
+
+1. Add the library
+
+Add the attached "motionphotoutil.aar" to the Gallery project as a dependency.
+
+2. Prepare inputs and output
+
+- "inputs": List of input Motion Photo file paths.
+- "output": Destination path for the generated MP4 file.
+
+3. Create and run MotionScrap
+
+val inputs: List<String> = selectedFiles.map { it.absolutePath }
+val output: String =
+    File(outputDir, "motionscrap_output.mp4").absolutePath
+
+val motionScrap = MotionScrap.Builder()
+    .setOnProgressListener { progress ->
+        // Overall progress: 0.0f ~ 1.0f
+        Log.d(TAG, "Progress: $progress")
+    }
+    .setOnCompleteListener { success, event ->
+        when (event) {
+            ExportEvent.EXECUTE_COMPLETE ->
+                Log.d(TAG, "Export completed: $output")
+
+            ExportEvent.EXECUTE_CANCEL ->
+                Log.d(TAG, "Export canceled")
+
+            ExportEvent.EXECUTE_FAIL ->
+                Log.e(TAG, "Export failed")
+
+            else ->
+                Log.d(TAG, "success=$success, event=$event")
+        }
+    }
+    .build()
+
+val future: Future<Result> =
+    motionScrap.export(inputs, output)
+
+- "setOnProgressListener": Reports overall progress from "0.0f" to "1.0f".
+- "setOnCompleteListener": Reports the final status through "success" and "event".
+- Main completion events: "EXECUTE_COMPLETE", "EXECUTE_CANCEL", and "EXECUTE_FAIL".
+- "export()": Starts processing asynchronously and returns a "Future<Result>".
+
+If the result is needed, "Future.get()" can be used on a background thread because it blocks until processing completes.
+
+executor.execute {
+    val result: Result = future.get()
+    Log.d(TAG, "Export result: $result")
+}
+
+4. Cancel and release resources
+
+motionScrap.cancel() // Cancel an ongoing export
+motionScrap.close()  // Release resources
+
+Gallery-side Integration Reference
+
+For the Gallery-side changes needed to integrate MotionScrap, we have prepared the modifications in the WIP below. You can refer to it as an integration reference for the Gallery flow:
+
+[WIP link]
+
+We would appreciate it if you could test MotionScrap with the “Merge video clips” feature and share any feedback or issues you notice.
+
+If you encounter any issues, please feel free to share relevant details such as reproduction steps, input files, generated output, or logs if available. We’ll be happy to check them from our side.
+
+Please let us know if you need any additional information or support.
+
+Thank you for your help.
+
+Best regards,Tôi đánh giá bản này cân bằng hơn cho mail nội bộ: không quá dài như tài liệu API, nhưng vẫn đủ để phía Gallery bắt đầu integration và testing.
+
